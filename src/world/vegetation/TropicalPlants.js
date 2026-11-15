@@ -23,7 +23,7 @@ const table = ( a ) => Object.fromEntries( a.map( ( v, i ) => [ i, v ] ) );
 // tables that start at level 1 (angle, start: a property of a child relative to its parent)
 const from1 = ( a ) => Object.fromEntries( a.map( ( v, i ) => [ i + 1, v ] ) );
 
-function plant( { type = 'deciduous', levels = 3, angle, children, length, radius, taper, gnarl, start, twist = [ 0, 0, 0, 0 ],
+function plant( { type = 'deciduous', levels = 3, angle, children, length, radius, taper, gnarl, start, twist = [ 0, 0, 0, 0 ], whorls = [ 0, 0, 0 ],
 	force = 0, sections = [ 8, 6, 4, 2 ], segments = [ 7, 5, 4, 3 ], leaves } ) {
 
 	return {
@@ -42,6 +42,8 @@ function plant( { type = 'deciduous', levels = 3, angle, children, length, radiu
 			start: from1( start ),
 			taper: table( taper ),
 			twist: table( twist ),
+			// (Tidewater's addition to the generator: the children of a level grouped into this many tiers)
+			whorls: from1( whorls ),
 		},
 		leaves: { billboard: 'double', sizeVariance: 0.5, start: 0.1, ...leaves },
 	};
@@ -68,9 +70,10 @@ export const TROPICAL_PLANTS = {
 		options: plant( {
 			// (evergreen growth: the branches shorten toward the top, the outline of a pagoda; level, and
 			// held level: no sag)
-			type: 'evergreen', levels: 2, angle: [ 88, 60 ], children: [ 13, 5, 0 ], length: [ 34, 30, 10, 1 ],
+			type: 'evergreen', levels: 2, angle: [ 88, 60 ], children: [ 20, 5, 0 ], length: [ 34, 30, 10, 1 ],
 			radius: [ 0.95, 0.42, 0.6, 0.7 ], taper: [ 0.6, 0.6, 0.7, 0.7 ], gnarl: [ 0.02, 0.03, 0.06, 0 ], start: [ 0.3, 0.4 ],
-			force: 0.001, sections: [ 10, 6, 4, 2 ],
+			// (four whorls of five branches up the trunk: the tiers)
+			whorls: [ 4, 0 ], force: 0.001, sections: [ 10, 6, 4, 2 ],
 			leaves: { count: 9, size: 3.0, angle: 28, start: 0.4, sizeVariance: 0.3 },
 		} ),
 	},

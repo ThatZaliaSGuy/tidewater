@@ -59,6 +59,23 @@ assert.ok( A[ 'Mangrove' ] > 1.3, `mangrove: low and spreading (${ A[ 'Mangrove'
 assert.ok( A[ 'Flame Tree' ] > 1.15, `flame tree: a crown wider than the tree is tall (${ A[ 'Flame Tree' ].toFixed( 2 ) })` );
 assert.ok( A[ 'Tropical Almond' ] > 0.85, `tropical almond: long level branches (${ A[ 'Tropical Almond' ].toFixed( 2 ) })` );
 assert.ok( A[ 'Casuarina' ] < A[ 'Tropical Almond' ] && A[ 'Tropical Almond' ] < A[ 'Banyan Fig' ], 'casuarina < tropical almond < banyan in spread' );
+// the tropical almond's tiers: its 20 main branches leave the trunk in 4 whorls of 5 (the generator's
+// `whorls` option): 4 tight groups of heights, with clear trunk between them
+{
+
+	const t = growTropical( 'Tropical Almond', { seed: 5 } );
+	const trunk = t.tree.skeleton.branches[ 0 ].sections;
+	const top = trunk[ trunk.length - 1 ].origin.y;
+	// (a main branch: one that starts on the trunk's axis; the skeleton keeps no level)
+	const onTrunk = ( o ) => trunk.some( ( s, i ) => i + 1 < trunk.length && o.y >= s.origin.y - 1e-6 && o.y <= trunk[ i + 1 ].origin.y + 1e-6
+		&& Math.hypot( o.x - s.origin.x, o.z - s.origin.z ) < 0.08 * top );
+	const ys = t.tree.skeleton.branches.slice( 1 ).map( ( b ) => b.sections[ 0 ].origin ).filter( onTrunk ).map( ( o ) => o.y / top ).sort( ( a, b ) => a - b );
+	const tiers = [ [ ys[ 0 ] ] ];
+	for ( let i = 1; i < ys.length; i ++ ) { if ( ys[ i ] - ys[ i - 1 ] > 0.06 ) tiers.push( [] ); tiers[ tiers.length - 1 ].push( ys[ i ] ); }
+	assert.equal( tiers.length, 4, `tropical almond: 4 tiers of branches (${ tiers.map( ( g ) => g.length ).join( ', ' ) })` );
+	assert.ok( tiers.every( ( g ) => g.length >= 4 && g[ g.length - 1 ] - g[ 0 ] < 0.05 ), 'tropical almond: each tier a tight whorl' );
+
+}
 // the same seed gives the same plant, another seed another one
 {
 

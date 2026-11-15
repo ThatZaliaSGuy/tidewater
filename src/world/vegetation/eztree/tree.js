@@ -470,11 +470,25 @@ export class Tree extends THREE.Group {
     const startMin = this.options.branch.start[level];
     const heightStep = (1.0 - startMin) / count;
     const angleSlots = this.shuffledIndices(count);
+    // [Tidewater] Optional whorls: with options.branch.whorls[level] = W > 0 the
+    // children are grouped into W tiers along the parent instead of being spread
+    // evenly. See the whorl branches below; 0 / undefined keeps upstream behaviour.
+    const whorls = Math.min(count, Math.max(0, Math.floor(this.options.branch.whorls?.[level] ?? 0)));
 
     for (let i = 0; i < count; i++) {
       // Stratified sampling along the parent's length: jitter within slot [i, i+1]
       // so children are spread evenly but not perfectly periodic.
       let childBranchStart = startMin + (i + this.rng.random()) * heightStep;
+      // [Tidewater] In a whorl every child starts at the tier's height (a small
+      // jitter keeps the bases from coinciding).
+      const whorlIndex = whorls > 0 ? Math.floor((i * whorls) / count) : 0;
+      if (whorls > 0) {
+        const jitter = this.rng.random(0.08, -0.08);
+        childBranchStart = Math.min(
+          0.999,
+          startMin + ((whorlIndex + 0.5 + jitter) / whorls) * (1.0 - startMin),
+        );
+      }
 
       // Find which sections are on either side of the child branch origin point
       // so we can determine the origin, orientation and radius of the branch
@@ -516,7 +530,18 @@ export class Tree extends THREE.Group {
       // and angle slot are uncorrelated — otherwise evergreens (where branch
       // length depends on height) spiral their longest branches to a fixed side.
       const radialJitter = this.rng.random(0.5, -0.5);
-      const radialAngle = 2.0 * Math.PI * (radialOffset + (angleSlots[i] + radialJitter) / count);
+      let radialAngle = 2.0 * Math.PI * (radialOffset + (angleSlots[i] + radialJitter) / count);
+      // [Tidewater] In a whorl the tier's children are spread evenly around the
+      // parent (slightly jittered), and each tier is turned against the one below
+      // by the golden angle so the tiers don't stack their branches.
+      if (whorls > 0) {
+        const first = Math.ceil((whorlIndex * count) / whorls);
+        const next = Math.ceil(((whorlIndex + 1) * count) / whorls);
+        const members = Math.max(1, next - first);
+        radialAngle =
+          2.0 * Math.PI * (radialOffset + (i - first + radialJitter * 0.35) / members) +
+          whorlIndex * 2.39996;
+      }
       const q1 = new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3(1, 0, 0),
         this.options.branch.angle[level] / (180 / Math.PI),

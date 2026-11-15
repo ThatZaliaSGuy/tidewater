@@ -115,6 +115,13 @@ export default class TreeOptions {
         3: 0.7,
       },
 
+      // [Tidewater] Number of whorls (tiers) the child branches of each level are
+      // grouped into along their parent. 0 = spread evenly (upstream behaviour).
+      whorls: {
+        1: 0,
+        2: 0,
+        3: 0,
+      },
       // Amount of twist at each branch level
       twist: {
         0: 0,
