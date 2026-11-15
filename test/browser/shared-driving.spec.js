@@ -17,7 +17,7 @@ test( 'The Jeep plays its recorded engine, follows RPM and can be muted', async 
 		await page.getByRole( 'button', { name: 'Drive Black Jeep', exact: true } ).click();
 	} );
 	await test.step( 'Then the real HEMI recording is decoded and playing through Web Audio', async () => {
-		await expect( telemetry( page ) ).toHaveAttribute( 'data-audio-recording', 'jeep-hemi.wav' );
+		await expect( telemetry( page ) ).toHaveAttribute( 'data-audio-recording', 'jeep-hemi.ogg' );
 		await expect( telemetry( page ) ).toHaveAttribute( 'data-audio-state', 'playing' );
 		expect( await number( page, 'audio-gain' ) ).toBeGreaterThan( 0 );
 	} );

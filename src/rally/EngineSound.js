@@ -2,7 +2,7 @@
 // real local recordings; engine RPM/load, rather than road speed, drive pitch.
 // Tyres add a procedural layer on top: rolling roar and loose-surface crunch that
 // follow speed and surface, and a squeal only when a tyre really slides on a hard surface.
-const RECORDINGS = { aster: 'aster-inline-six.wav', jeep: 'jeep-hemi.wav' };
+const RECORDINGS = { aster: 'aster-inline-six.ogg', jeep: 'jeep-hemi.ogg' };
 // Idle and redline of each engine, matching rally-physics/src/vehicle.rs.
 const RANGE = { aster: [ 850, 7200 ], jeep: [ 650, 5600 ] };
 // Wheel surface codes from the physics snapshot.
