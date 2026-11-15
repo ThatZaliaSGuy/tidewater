@@ -24,13 +24,23 @@ export const EZ_TREE_PRESETS = Object.keys( TreePreset ).filter( ( name ) => nam
 // detail: ez-tree's mesh detail, e.g. for a coarser far level of the same tree:
 //   { sectionStride (keep every Nth ring of a branch), segmentFactor (fraction of the radial segments),
 //     leafStride (keep every Nth leaf), leafScale (enlarge the kept ones) }
+// preset: the name of one of ez-tree's presets, or an options object (any subset of ez-tree's
+// TreeOptions: missing fields keep its defaults; see TropicalPlants.js for Tidewater's own species)
 export function growEzTree( preset = 'Oak Medium', { seed = null, height = null, detail = undefined } = {} ) {
 
-	if ( ! TreePreset[ preset ] ) throw new Error( `growEzTree: unknown preset "${ preset }" (${ EZ_TREE_PRESETS.join( ', ' ) })` );
 	const tree = new Tree();
-	tree.loadPreset( preset );
-	// (loading a preset already grows a tree from the preset's own seed: drop that skeleton, so
-	// createGeometry() grows this one)
+	if ( typeof preset === 'string' ) {
+
+		if ( ! TreePreset[ preset ] ) throw new Error( `growEzTree: unknown preset "${ preset }" (${ EZ_TREE_PRESETS.join( ', ' ) })` );
+		tree.options.copy( structuredClone( TreePreset[ preset ] ) );
+
+	} else {
+
+		tree.options.copy( structuredClone( preset ) );
+
+	}
+	// (not tree.loadPreset(): it grows and meshes a tree at once, from the preset's own seed, with
+	// ez-tree's materials. Here the skeleton is grown by createGeometry(), from this seed.)
 	if ( seed !== null ) tree.options.seed = seed;
 	tree.skeleton = null;
 	const { branches, leaves } = tree.createGeometry( detail );

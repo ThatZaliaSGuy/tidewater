@@ -89,7 +89,9 @@ them from J. Jimenez et al.'s SMAA reference implementation (MIT).
 [ez-tree](https://github.com/dgreenheck/ez-tree) 1.1.0 by Daniel Greenheck (MIT, Copyright (c) 2024 Daniel
 Greenheck) is vendored in `src/world/vegetation/eztree/` with its licence: the procedural tree generator
 (skeleton growth, meshing and presets), run on this engine through a small shim. See the README in that
-folder for the upstream commit and the changes.
+folder for the upstream commit and the changes. The tropical species grown with it (sea grape, tropical
+almond, frangipani, banyan fig, flame tree, casuarina, mangrove, beach naupaka, hibiscus, scrub tangle,
+croton, ti plant) are this project's own option sets: `src/world/vegetation/TropicalPlants.js`.
 
 [Vite](https://vite.dev) (MIT) is an npm dependency and is not vendored here.
 
