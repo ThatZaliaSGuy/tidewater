@@ -33,6 +33,7 @@ export class AppUI {
 			swell: fft.swell.scale,
 			whitecaps: 0.5,
 			clarity: 1,
+			glints: app.waterMaterial.params.glints.value,
 			surf: shore.amplitude.value,
 			period: shore.period.value,
 			gamma: shore.gamma.value,
@@ -123,6 +124,7 @@ export class AppUI {
 		sea.addSlider( { label: 'Whitecaps', object: s, key: 'whitecaps', min: 0, max: 1, step: 0.01, onChange: whitecaps } );
 		const water = ocean.addFolder( 'Water', { icon: 'droplet' } );
 		water.addSlider( { label: 'Clarity', object: s, key: 'clarity', min: 0.3, max: 2, step: 0.01, tooltip: 'Lower = more suspended sediment and plankton (greener, murkier).', onChange: clarity } );
+		water.addSlider( { label: 'Sun glints', object: s, key: 'glints', min: 0, max: 1, step: 0.01, tooltip: 'Breaks the sun\'s highlight on the water into twinkling sparks. 0 = the smooth highlight only.', onChange: ( v ) => { app.waterMaterial.params.glints.value = v; } } );
 
 		// ---------------------------------------------------------------- Shore
 		const shoreTab = ui.addTab( 'shore', 'Shore', 'shore' );

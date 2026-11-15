@@ -76,6 +76,7 @@ export class WaterMaterial extends Material {
 				waterRoughness: [ 'f32', 0.035 ],
 				reflectionStrength: [ 'f32', 1.0 ],
 				ssr: [ 'f32', 1 ], // screen-space reflections on/off
+				glints: [ 'f32', 0.6 ], // sun glitter: 0 = the smooth GGX highlight only .. 1 = fully broken into facets
 				debugMode: [ 'i32', 0 ],
 				hullActive: [ 'f32', 0 ],
 				// the ridden jetski's headlamp on the sea (src/jetski/JetskiLights.js pool()): xyz world position,
@@ -108,6 +109,7 @@ export class WaterMaterial extends Material {
 			roughness: U.waterRoughness,
 			reflectionStrength: U.reflectionStrength,
 			ssr: U.ssr,
+			glints: U.glints,
 		};
 		this.debugMode = U.debugMode;
 
@@ -384,9 +386,24 @@ ${ REFL ? `
 		let NdH = max( dot( N, H ), 0.0 );
 		let VdH = max( dot( V, H ), 0.0 );
 		let Fs = fresnelDielectric( VdH, ${ IOR } );
-		let spec = _waterDGGX( NdH, alpha2 ) * _waterVSmithGGX( NdL, NdV, alpha2 ) * Fs * NdL;
+		let Dsun = _waterDGGX( NdH, alpha2 );
+		let spec = Dsun * _waterVSmithGGX( NdL, NdV, alpha2 ) * Fs * NdL;
+		// Sun glitter. The GGX lobe is the average over infinitely many facets; a pixel only covers a
+		// finite number of them, and away from the core of the highlight only a few (or none) face
+		// the sun at any moment: the highlight breaks into sparks there. Expected number per m^2 of
+		// sea that mirror the sun disc into the eye: facet density * D( h ) * ( n.h ) * sun solid
+		// angle / ( 4 v.h ). The count drawn for this pixel's cell, over its mean, scales the smooth
+		// lobe (mean 1: the same energy on average). After Ultra Water's glints (see CREDITS.md).
+		var specG = spec;
+		if ( mat.glints > 0.0 && spec > 0.02 ) {
+			let perArea = WATER_GLINT_FACETS * Dsun * NdH * WATER_SUN_SOLID_ANGLE / ( 4.0 * max( VdH, 0.05 ) );
+			// (not right under the camera, where a cell is a few mm and the count is always ~0, nor at
+			// grazing angles, where a cell stretches over many waves)
+			let w = mat.glints * smoothstep( 4.0, 30.0, dist ) * smoothstep( 0.04, 0.25, V.y );
+			specG = spec * mix( 1.0, _waterGlints( lagXZ, footprint, perArea ), w );
+		}
 		// physically the glint is ~1e5x brighter than the sky; clamp to stay inside fp16 range
-		let sunSpec = sunLight * min( spec, 400.0 );
+		let sunSpec = sunLight * min( specG, 400.0 );
 
 		// ---- refraction / water volume
 		// Trace the refracted view ray (Snell) to the sea floor instead of using the straight
@@ -721,6 +738,58 @@ fn _waterVSmithGGX( NdL: f32, NdV: f32, a2: f32 ) -> f32 {
 	let gv = NdL * sqrt( NdV * NdV * ( 1.0 - a2 ) + a2 );
 	let gl = NdV * sqrt( NdL * NdL * ( 1.0 - a2 ) + a2 );
 	return 0.5 / max( gv + gl, 1e-5 );
+}
+
+// ---- sun glitter (see the sun specular in the fragment stage)
+// capillary facets per m^2 of sea surface that can act as a mirror: the look's calibration knob
+// (more: finer, denser sparkle that reads as the smooth lobe sooner; fewer: bigger, sparser sparks)
+const WATER_GLINT_FACETS: f32 = 20000.0;
+// solid angle of the sun disc (sr): the cone of normals around h that mirror some part of it
+const WATER_SUN_SOLID_ANGLE: f32 = 0.000068;
+
+// A Poisson-distributed count with mean lam, from one uniform random number u in (0, 1): the
+// inverse CDF summed term by term for small means, a normal approximation (through the logistic
+// quantile, scaled to unit variance) for large ones, where the sum would need too many terms.
+fn _waterPoisson( lam: f32, u: f32 ) -> f32 {
+	if ( lam > 8.0 ) { return max( lam + sqrt( lam ) * log( u / ( 1.0 - u ) ) * 0.5513, 0.0 ); }
+	var term = exp( - lam );
+	var cdf = term;
+	var n = 0.0;
+	for ( var k = 0; k < 16; k++ ) {
+		if ( u <= cdf ) { break; }
+		n += 1.0;
+		term *= lam / n;
+		cdf += term;
+	}
+	return n;
+}
+
+// Glitter multiplier (mean 1) for the surface point with rest position xz. The sea is divided into
+// world-space cells about two pixel footprints across; each cell draws how many of its facets
+// mirror the sun right now (perArea: the expected number per m^2) and returns that count over its
+// mean. Cells with many (the core of the highlight, the far field) stay at ~1: the smooth lobe.
+// Cells expecting less than one are dark most of the time and flash when one catches the sun.
+// Two cell sizes an octave apart are blended by the footprint, so sparks don't pop as the camera
+// moves, and every cell redraws three times a second at its own phase, crossfading: the twinkle.
+fn _waterGlints( xz: vec2f, footprint: f32, perArea: f32 ) -> f32 {
+	let level = log2( max( footprint, 1e-3 ) ) + 1.0;
+	let l0 = floor( level );
+	let blend = level - l0;
+	var m = 0.0;
+	for ( var j = 0; j < 2; j++ ) {
+		let l = l0 + f32( j );
+		let size = exp2( l );
+		let cell = floor( xz / size );
+		let lam = perArea * size * size;
+		let clock = frame.time * 3.0 + hash31( vec3f( cell, l ) ) * 64.0;
+		let tick = floor( clock );
+		let u0 = clamp( hash31( vec3f( cell + vec2f( l * 31.0, 17.0 ), tick ) ), 1e-4, 0.9999 );
+		let u1 = clamp( hash31( vec3f( cell + vec2f( l * 31.0, 17.0 ), tick + 1.0 ) ), 1e-4, 0.9999 );
+		let count = mix( _waterPoisson( lam, u0 ), _waterPoisson( lam, u1 ), smoothstep( 0.0, 1.0, clock - tick ) );
+		// (capped: a lone facet in a cell expecting 0.01 would be 100x the lobe, a single hot pixel)
+		m += select( blend, 1.0 - blend, j == 0 ) * min( count / max( lam, 1e-4 ), 32.0 );
+	}
+	return m;
 }
 // depth via exact texel loads (float depth textures + filtering samplers are unreliable)
 fn _waterSceneDepthAt( uv: vec2f ) -> f32 {

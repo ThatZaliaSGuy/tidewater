@@ -103,6 +103,8 @@ These are published techniques. No code from the papers is included.
 | SMAA / FXAA | J. Jimenez et al., *SMAA: Enhanced Subpixel Morphological Antialiasing* (2012); T. Lottes, *FXAA* (2009); ported from three.js' SMAANode / FXAANode (MIT) |
 | Rasterized caustics | Evan Wallace's *WebGL Water* approach |
 | Breaking waves | Guerrilla Games, *Horizon Forbidden West* water (SIGGRAPH 2022) |
+| Breaker types (spilling / plunging / surging) | Battjes, *Surf similarity* (1974): the Iribarren number of the bottom slope |
+| Sun glitter on the water | The idea of Humpalumps' *Ultra Water* (https://github.com/Humpalumps/Ultra-Water, MIT, Copyright (c) 2026 Humpalumps): the highlight as a Poisson count of sun-mirroring facets per pixel-sized cell. Written for this engine in WGSL (`_waterGlints` in `src/ocean/WaterMaterial.js`) |
 
 The cloud noise, lighting and sampling scheme (`src/sky/Clouds.js`) is adapted from DRG Software Solutions'
 own *Sky Pro WebGPU*. It is published here under this repository's MIT license by its copyright holder.
