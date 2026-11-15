@@ -1,0 +1,3 @@
+# rally-physics sources are hashed by test/rally-bridge.mjs (source-manifest.json): keep them LF
+# on every checkout, or a Windows checkout (core.autocrlf) changes the hashes
+rally-physics/src/** text eol=lf
