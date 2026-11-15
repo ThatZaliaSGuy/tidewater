@@ -86,6 +86,11 @@ SIL Open Font License 1.1. They are loaded from Google Fonts at runtime and are 
 The SMAA area and search lookup textures (`public/textures/smaa/`) are from three.js (MIT), which ships
 them from J. Jimenez et al.'s SMAA reference implementation (MIT).
 
+[ez-tree](https://github.com/dgreenheck/ez-tree) 1.1.0 by Daniel Greenheck (MIT, Copyright (c) 2024 Daniel
+Greenheck) is vendored in `src/world/vegetation/eztree/` with its licence: the procedural tree generator
+(skeleton growth, meshing and presets), run on this engine through a small shim. See the README in that
+folder for the upstream commit and the changes.
+
 [Vite](https://vite.dev) (MIT) is an npm dependency and is not vendored here.
 
 ## Techniques and references
