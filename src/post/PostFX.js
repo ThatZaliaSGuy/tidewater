@@ -8,6 +8,7 @@ import { LENS_REACH } from './Underwater.js';
 import { commonModule } from '../engine/render/wgsl/common.js';
 import { Matrix4, Vector2, Vector3 } from '../engine/math/index.js';
 import { GTAO } from './GTAO.js';
+import { BounceLight } from './BounceLight.js';
 import { AntiAlias } from './AntiAlias.js';
 import { TemporalUpscale } from './TemporalUpscale.js';
 import { LensDroplets } from './LensDroplets.js';
@@ -72,6 +73,7 @@ export class PostFX {
 
 		this.uniforms = new UniformBlock( 'PostParams', {
 			aoStrength: [ 'f32', 1.0 ],
+			bounceStrength: [ 'f32', 0.6 ], // screen-space bounce light (0 = off)
 			bloom: [ 'f32', 0.05 ],
 			vignette: [ 'f32', 0.28 ],
 			saturation: [ 'f32', 1.06 ],
@@ -131,6 +133,9 @@ fn fragment( in: FSIn ) -> vec4f {
 		this.aoPass.scale.value = 1.6;
 		this.aoPass.samples.value = 12;
 		this.aoPass.useTemporalFiltering = true;
+		// one bounce of the light of the lit opaque scene, gathered around each pixel at the AO's
+		// resolution and on its depth copy (post/BounceLight.js); added by the beauty pass
+		this.bounce = new BounceLight( { depth: () => this.aoDepth.texture, color: () => opaque.texture, camera: this.aoPass.uniforms } );
 		// spatial denoise at the AO resolution (separable 5 + 5 taps, depth-aware): GTAO rotates its
 		// directions over a 5x5 pattern and jitters its steps per pixel and per frame, which only the
 		// temporal resolve averaged out; where it can't accumulate (the rocking helm, fast turns) that
@@ -244,6 +249,7 @@ ${ taps }
 				postFinalDepth: { texture: () => this.finalDepth },
 				postAO: { texture: () => this.aoBlurY.texture },
 				postAODepth: { texture: () => this.aoDepth.texture },
+				postBounce: { texture: () => this.bounce.texture },
 			},
 			code: /* wgsl */`
 fn postDepthLoad( uv: vec2f, which: i32 ) -> f32 {
@@ -272,6 +278,7 @@ fn postColorAO( uv: vec2f ) -> vec3f {
 	let i0 = floor( pa );
 	let fr = pa - i0;
 	var aSum = 0.0; var wSum = 1e-4;
+	var gSum = vec3f( 0.0 );
 	for ( var k = 0; k < 4; k++ ) {
 		let o = vec2i( k & 1, k >> 1u );
 		let pT = clamp( vec2i( i0 ) + o, vec2i( 0 ), aoSizeI - 1 );
@@ -282,6 +289,7 @@ fn postColorAO( uv: vec2f ) -> vec3f {
 		let wDepth = 1.0 / pow2( rel * 40.0 + 1.0 );
 		let wt = wBil * wDepth + 1e-5;
 		aSum += textureLoad( postAO, pT, 0 ).r * wt;
+		gSum += textureLoad( postBounce, pT, 0 ).rgb * wt;
 		wSum += wt;
 	}
 	let a = aSum / wSum;
@@ -291,7 +299,14 @@ fn postColorAO( uv: vec2f ) -> vec3f {
 	// a third of it on sunlit surfaces (still grounds objects without dirty halos)
 	let ambientOnly = 1.0 - smoothstep( 0.12, 0.9, luminance( c ) );
 	let k = select( post.aoStrength * mix( 0.35, 1.0, ambientOnly ), 0.0, isSky || covered );
-	return c * mix( 1.0, aMB, k );
+	// Bounce light: the average colour seen around the pixel (post/BounceLight.js), times the
+	// surface's albedo. There is no albedo buffer: its hue is taken from the lit pixel itself
+	// (its colour over its brightest channel), at a typical reflectance, half-way to neutral so a
+	// surface lit by a coloured sky doesn't tint the bounce twice.
+	let hue = c / max( max( c.r, max( c.g, c.b ) ), 0.02 );
+	let albedo = mix( vec3f( 0.45 ), hue * 0.6, 0.5 );
+	let bounced = albedo * ( gSum / wSum ) * post.bounceStrength;
+	return c * mix( 1.0, aMB, k ) + bounced;
 }
 
 fn postSceneSample( uv: vec2f ) -> vec3f {
@@ -573,6 +588,7 @@ fn fragment( in: FSIn ) -> vec4f {
 		this.aoDepth.setSize( aw, ah );
 		this.aoBlurX.setSize( aw, ah );
 		this.aoBlurY.setSize( aw, ah );
+		this.bounce.setSize( aw, ah );
 		if ( this.haze ) this.haze.setSize( ow, oh );
 		this.taau.setSize( ow, oh );
 		if ( this.bloomDown ) {
@@ -652,6 +668,9 @@ fn fragment( in: FSIn ) -> vec4f {
 		this.aoPass.render();
 		this._aoBlurXPass.render( { colorViews: [ this.aoBlurX.texture ], clear: CLR } );
 		this._aoBlurYPass.render( { colorViews: [ this.aoBlurY.texture ], clear: CLR } );
+		// (after the AO: it shares the AO's camera uniforms, updated by aoPass.render())
+		this.bounce.enabled = this.params.bounceStrength.value > 0;
+		this.bounce.render();
 		this._mediumPass.render( { colorViews: [ this.medium.texture ], clear: CLR } );
 		// caustic shafts / torch beam march (half res): only while the lens can be under water (the CPU
 		// water height lags the GPU's by a frame: 1 m of margin)

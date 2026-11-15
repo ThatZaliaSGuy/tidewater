@@ -1,7 +1,7 @@
 // Post chain test (headless): a small scene through SceneRenderer + the whole PostFX chain (GTAO,
 // AirHaze, Underwater, TAAU, motion blur, bloom, lens flare, droplets, grading, ACES) at the real
 // output resolution, with stubbed modules of the other streams.
-//   node test/post-chain.mjs [mode] [out.png]     mode: air | under | motion | noao | flare | lens | waterline
+//   node test/post-chain.mjs [mode] [out.png]     mode: air | under | motion | noao | nobounce | flare | lens | waterline
 import { writePNG } from './headless.mjs';
 import './smaa-shim.mjs';
 import { GPU } from '../src/engine/gpu/GPU.js';
@@ -155,6 +155,8 @@ post.outputTexture = new Texture( { label: 'out', width: W, height: H, format: '
 if ( process.env.SCALE ) post.setScale( Number( process.env.SCALE ) );
 if ( process.env.AO_SAMPLES ) post.aoPass.samples.value = Number( process.env.AO_SAMPLES );
 if ( mode === 'noao' ) post.params.aoStrength.value = 0;
+if ( mode === 'nobounce' ) post.params.bounceStrength.value = 0;
+if ( process.env.BOUNCE ) post.params.bounceStrength.value = Number( process.env.BOUNCE );
 if ( mode !== 'motion' ) post.motionBlur.shutter.value = 0.5;
 const profiler = new Profiler( engine, { enabled: true } );
 profiler.debugRaw = !! process.env.RAW;

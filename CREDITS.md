@@ -105,6 +105,7 @@ These are published techniques. No code from the papers is included.
 | Breaking waves | Guerrilla Games, *Horizon Forbidden West* water (SIGGRAPH 2022) |
 | Breaker types (spilling / plunging / surging) | Battjes, *Surf similarity* (1974): the Iribarren number of the bottom slope |
 | Screen-space reflections on wet and glossy surfaces | The water's own reflection march applied to the opaque layer (`src/post/SurfaceReflections.js`); screen-space reflections after Sousa, Kasyan and Schulz, *Secrets of CryENGINE 3 Graphics Technology* (SIGGRAPH 2011) |
+| Screen-space bounce light | Horizon-based: the slice structure of GTAO (Jimenez et al., *Practical Real-Time Strategies for Accurate Indirect Occlusion*, 2016), gathering the colour of each sample that raises the horizon (`src/post/BounceLight.js`); after B. Mayaux, *Horizon-Based Indirect Lighting (HBIL)* (2018) |
 | Sun glitter on the water | The idea of Humpalumps' *Ultra Water* (https://github.com/Humpalumps/Ultra-Water, MIT, Copyright (c) 2026 Humpalumps): the highlight as a Poisson count of sun-mirroring facets per pixel-sized cell. Written for this engine in WGSL (`_waterGlints` in `src/ocean/WaterMaterial.js`) |
 
 The cloud noise, lighting and sampling scheme (`src/sky/Clouds.js`) is adapted from DRG Software Solutions'

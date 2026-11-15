@@ -49,6 +49,7 @@ export class AppUI {
 			fov: app.camera.fov,
 			camMode: 'third',
 			ao: app.post.params.aoStrength.value,
+			bounce: app.post.params.bounceStrength.value,
 			bloom: app.post.params.bloom.value,
 			flare: app.post.flare ? app.post.flare.strength.value : 1,
 			vignette: app.post.params.vignette.value,
@@ -209,6 +210,7 @@ export class AppUI {
 		const post = fx.addFolder( 'Post-processing', { icon: 'sparkles' } );
 		const P = app.post.params;
 		post.addSlider( { label: 'Ambient occlusion', object: s, key: 'ao', min: 0, max: 1.5, step: 0.01, onChange: ( v ) => { P.aoStrength.value = v; } } );
+		post.addSlider( { label: 'Bounce light', object: s, key: 'bounce', min: 0, max: 1.5, step: 0.01, tooltip: 'Light bounced between nearby surfaces on screen (a coloured hull tinting the planks beside it). 0 = off.', onChange: ( v ) => { P.bounceStrength.value = v; } } );
 		s.bounce = GroundBounce.strength.value;
 		post.addSlider( { label: 'Bounce light', object: s, key: 'bounce', min: 0, max: 2, step: 0.01, tooltip: 'Sunlight reflected off the ground (bright sand) onto undersides and shaded faces: pier, eaves, hulls, trunks. 0 = off.', onChange: ( v ) => { GroundBounce.strength.value = v; } } );
 		s.sharpen = P.sharpen.value;
