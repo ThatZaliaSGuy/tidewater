@@ -727,10 +727,11 @@ fn shoreFoamAt( xz: vec2f, depth: f32 ) -> f32 {
 	let m = floor( ph.s + 0.5 );
 	let u = ph.s - m;
 	let A = mix( shoreWaveAmp( m, ph.along ), shoreWaveAmp( m + sign( u ), ph.along ), smoothstep( 0.32, 0.5, abs( u ) ) * 0.5 );
-	let dB = shoreBreakDepth( xz, ph.dir, u, lam, d );
+	// (the same break depth and breaker type as shoreEvaluate, so the foam matches the wave's shape)
+	let brk = shoreBreakDepth( xz, ph.dir, u, lam, d, A );
 	let env = ( 1.0 - smoothstep( 13.0, 26.0, d ) ) * smoothstep( -0.25, 0.05, d ) * sat( ph.exposure * 1.4 ) * shoreP.enabled;
 	let wwPatch = smoothstep( -0.5, 0.45, perlin2( vec2f( ph.along * 0.06 + frame.time * 0.05, m * 2.9 + 0.4 ) ) );
-	return shoreShape( u, A, dB, lam ).z * env * mix( 0.3, 1.0, wwPatch );
+	return shoreShape( u, A, brk.x, lam, brk.yz ).z * env * mix( 0.3, 1.0, wwPatch );
 }
 `;
 
