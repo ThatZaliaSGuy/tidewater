@@ -10,6 +10,7 @@ import { growEzTree } from './EzTree.js';
 //   kind    'tree' | 'brush' | 'foliage'
 //   height  [ min, max ] in metres (a plant's height is picked in this range from its seed)
 //   leaf    colour of the foliage (linear-ish sRGB hex, for materials and tests)
+//   leafWidth  width of a leaf as a fraction of its length (1 round, 0.5 oval, 0.2 a strap, 0.1 a needle)
 //   bark    colour of the bark
 //   where   where it grows: 'shore' (the back of the beach), 'coast' (dunes, scrub), 'inland', 'wet' (water's edge)
 //   note    what makes the species recognisable, i.e. what its options are after
@@ -52,7 +53,7 @@ export const TROPICAL_PLANTS = {
 	// ------------------------------------------------------------------ trees
 
 	'Sea Grape': {
-		kind: 'tree', height: [ 3.5, 6.5 ], leaf: 0x5f8a3a, bark: 0x8a7a66, where: 'shore',
+		kind: 'tree', height: [ 3.5, 6.5 ], leaf: 0x5f8a3a, leafWidth: 1.0, bark: 0x8a7a66, where: 'shore',
 		note: 'low and sprawling, wider than tall, on a short leaning trunk; big round leathery leaves',
 		options: plant( {
 			angle: [ 64, 56, 42 ], children: [ 5, 4, 3 ], length: [ 11, 16, 11, 6 ], radius: [ 1.5, 0.82, 0.7, 0.75 ],
@@ -62,18 +63,20 @@ export const TROPICAL_PLANTS = {
 	},
 
 	'Tropical Almond': {
-		kind: 'tree', height: [ 8, 14 ], leaf: 0x4c7d2e, bark: 0x6d5f52, where: 'shore',
+		kind: 'tree', height: [ 8, 14 ], leaf: 0x4c7d2e, leafWidth: 0.55, bark: 0x6d5f52, where: 'shore',
 		note: 'a straight trunk with flat, horizontal tiers of branches (a pagoda); large paddle leaves at the branch ends',
 		options: plant( {
-			levels: 2, angle: [ 92, 70 ], children: [ 16, 6, 0 ], length: [ 34, 21, 9, 1 ], radius: [ 1.35, 0.42, 0.6, 0.7 ],
-			taper: [ 0.6, 0.6, 0.7, 0.7 ], gnarl: [ 0.02, 0.03, 0.08, 0 ], start: [ 0.36, 0.3 ], force: - 0.003,
-			sections: [ 10, 6, 4, 2 ],
-			leaves: { count: 11, size: 3.4, angle: 22, start: 0.35, sizeVariance: 0.3 },
+			// (evergreen growth: the branches shorten toward the top, the outline of a pagoda; level, and
+			// held level: no sag)
+			type: 'evergreen', levels: 2, angle: [ 88, 60 ], children: [ 13, 5, 0 ], length: [ 34, 30, 10, 1 ],
+			radius: [ 0.95, 0.42, 0.6, 0.7 ], taper: [ 0.6, 0.6, 0.7, 0.7 ], gnarl: [ 0.02, 0.03, 0.06, 0 ], start: [ 0.3, 0.4 ],
+			force: 0.001, sections: [ 10, 6, 4, 2 ],
+			leaves: { count: 9, size: 3.0, angle: 28, start: 0.4, sizeVariance: 0.3 },
 		} ),
 	},
 
 	'Frangipani': {
-		kind: 'tree', height: [ 2.8, 5 ], leaf: 0x567f34, bark: 0x9a9388, where: 'inland',
+		kind: 'tree', height: [ 2.8, 5 ], leaf: 0x567f34, leafWidth: 0.34, bark: 0x9a9388, where: 'inland',
 		note: 'stubby, swollen grey branches forking like a candelabra, bare but for a rosette of leaves at each tip',
 		options: plant( {
 			angle: [ 50, 46, 44 ], children: [ 3, 3, 2 ], length: [ 7, 7.5, 5.5, 4 ], radius: [ 1.5, 0.95, 0.92, 0.9 ],
@@ -83,27 +86,30 @@ export const TROPICAL_PLANTS = {
 	},
 
 	'Banyan Fig': {
-		kind: 'tree', height: [ 10, 16 ], leaf: 0x3d6b2a, bark: 0x77695c, where: 'inland',
+		kind: 'tree', height: [ 10, 16 ], leaf: 0x3d6b2a, leafWidth: 0.6, bark: 0x77695c, where: 'inland',
 		note: 'a massive short trunk and long heavy limbs: a dense crown far wider than the tree is tall',
 		options: plant( {
 			angle: [ 54, 50, 40 ], children: [ 8, 5, 3 ], length: [ 17, 24, 14, 8 ], radius: [ 3.4, 0.5, 0.72, 0.75 ],
 			taper: [ 0.45, 0.6, 0.65, 0.7 ], gnarl: [ 0.06, 0.1, 0.16, 0.1 ], start: [ 0.55, 0.2, 0.1 ], force: 0.014,
-			leaves: { count: 15, size: 2.7, angle: 40, sizeVariance: 0.5 },
+			leaves: { count: 18, size: 2.7, angle: 40, sizeVariance: 0.5 },
 		} ),
 	},
 
 	'Flame Tree': {
-		kind: 'tree', height: [ 7, 11 ], leaf: 0x5c8f33, bark: 0x7b6e60, where: 'inland',
+		kind: 'tree', height: [ 7, 11 ], leaf: 0x5c8f33, leafWidth: 0.36, bark: 0x7b6e60, where: 'inland',
 		note: 'an umbrella: limbs leave the top of a clean trunk and level out into a wide, flat, feathery crown',
 		options: plant( {
-			angle: [ 60, 72, 46 ], children: [ 6, 5, 3 ], length: [ 21, 23, 12, 6 ], radius: [ 1.5, 0.7, 0.68, 0.7 ],
-			taper: [ 0.65, 0.6, 0.65, 0.7 ], gnarl: [ 0.04, 0.1, 0.14, 0.08 ], start: [ 0.74, 0.3, 0.2 ], force: - 0.007,
-			leaves: { count: 14, size: 1.9, angle: 30, sizeVariance: 0.4 },
+			// (the shoot that continues the bole is a limb like the others: short, with wide side
+			// branches of its own, so it is the middle of the crown and not a leader above it. The limbs
+			// leave the top of a tall clean bole wide and stay level: a flat top. Fine, dense foliage.)
+			angle: [ 70, 72, 50 ], children: [ 7, 6, 3 ], length: [ 26, 15, 15, 7 ], radius: [ 1.4, 0.72, 0.7, 0.7 ],
+			taper: [ 0.65, 0.6, 0.65, 0.7 ], gnarl: [ 0.04, 0.08, 0.12, 0.08 ], start: [ 0.82, 0.2, 0.15 ], force: 0.001,
+			leaves: { count: 18, size: 1.5, angle: 32, sizeVariance: 0.4 },
 		} ),
 	},
 
 	'Casuarina': {
-		kind: 'tree', height: [ 10, 17 ], leaf: 0x5a7150, bark: 0x5f554c, where: 'coast',
+		kind: 'tree', height: [ 10, 17 ], leaf: 0x5a7150, leafWidth: 0.1, bark: 0x5f554c, where: 'coast',
 		note: 'tall and narrow with a see-through, drooping grey-green crown of needle-like twigs (the beach "pine")',
 		options: plant( {
 			type: 'evergreen', levels: 2, angle: [ 70, 34 ], children: [ 44, 5, 0 ], length: [ 54, 15, 7, 1 ],
@@ -114,7 +120,7 @@ export const TROPICAL_PLANTS = {
 	},
 
 	'Mangrove': {
-		kind: 'tree', height: [ 2.5, 5 ], leaf: 0x4a7a36, bark: 0x6a5546, where: 'wet',
+		kind: 'tree', height: [ 2.5, 5 ], leaf: 0x4a7a36, leafWidth: 0.5, bark: 0x6a5546, where: 'wet',
 		note: 'low and tangled over the water: several arching stems that bend back down, glossy upright leaves',
 		options: plant( {
 			angle: [ 58, 62, 46 ], children: [ 6, 4, 3 ], length: [ 6, 14, 8, 4.5 ], radius: [ 1.1, 0.8, 0.7, 0.7 ],
@@ -126,7 +132,7 @@ export const TROPICAL_PLANTS = {
 	// ------------------------------------------------------------------ brush
 
 	'Beach Naupaka': {
-		kind: 'brush', height: [ 0.8, 1.7 ], leaf: 0x6f9a44, bark: 0x8b7d63, where: 'shore',
+		kind: 'brush', height: [ 0.8, 1.7 ], leaf: 0x6f9a44, leafWidth: 0.62, bark: 0x8b7d63, where: 'shore',
 		note: 'a dense, rounded mound of bright, fleshy leaves right behind the beach',
 		options: plant( {
 			angle: [ 40, 60, 55 ], children: [ 9, 4, 2 ], length: [ 0.1, 9, 5, 3 ], radius: [ 0.55, 0.9, 0.75, 0.7 ],
@@ -137,7 +143,7 @@ export const TROPICAL_PLANTS = {
 	},
 
 	'Hibiscus': {
-		kind: 'brush', height: [ 1.4, 2.6 ], leaf: 0x3f7230, bark: 0x6f6252, where: 'inland',
+		kind: 'brush', height: [ 1.4, 2.6 ], leaf: 0x3f7230, leafWidth: 0.72, bark: 0x6f6252, where: 'inland',
 		note: 'an upright, vase-shaped shrub of long canes, dark glossy leaves along them',
 		options: plant( {
 			angle: [ 20, 50, 55 ], children: [ 6, 4, 2 ], length: [ 0.1, 15, 6, 4 ], radius: [ 0.5, 0.85, 0.7, 0.7 ],
@@ -148,7 +154,7 @@ export const TROPICAL_PLANTS = {
 	},
 
 	'Scrub Tangle': {
-		kind: 'brush', height: [ 0.9, 2.0 ], leaf: 0x6b7f45, bark: 0x7a6c58, where: 'coast',
+		kind: 'brush', height: [ 0.9, 2.0 ], leaf: 0x6b7f45, leafWidth: 0.55, bark: 0x7a6c58, where: 'coast',
 		note: 'wind-pruned coastal scrub: wiry, crooked stems splaying sideways, small sparse leaves (twigs show)',
 		options: plant( {
 			angle: [ 56, 70, 64 ], children: [ 8, 4, 3 ], length: [ 0.1, 12, 8, 5 ], radius: [ 0.45, 0.8, 0.7, 0.7 ],
@@ -161,7 +167,7 @@ export const TROPICAL_PLANTS = {
 	// ------------------------------------------------------------------ foliage (understory accents)
 
 	'Croton': {
-		kind: 'foliage', height: [ 0.6, 1.3 ], leaf: 0xb5862e, bark: 0x77664f, where: 'inland',
+		kind: 'foliage', height: [ 0.6, 1.3 ], leaf: 0xb5862e, leafWidth: 0.5, bark: 0x77664f, where: 'inland',
 		note: 'a small bushy accent plant: bold, broad, yellow-to-red variegated leaves',
 		options: plant( {
 			levels: 2, angle: [ 28, 46 ], children: [ 7, 2, 0 ], length: [ 0.1, 7, 3, 1 ], radius: [ 0.4, 0.8, 0.7, 0.7 ],
@@ -172,7 +178,7 @@ export const TROPICAL_PLANTS = {
 	},
 
 	'Ti Plant': {
-		kind: 'foliage', height: [ 1.2, 2.6 ], leaf: 0x7a3a52, bark: 0x8f8573, where: 'inland',
+		kind: 'foliage', height: [ 1.2, 2.6 ], leaf: 0x7a3a52, leafWidth: 0.2, bark: 0x8f8573, where: 'inland',
 		note: 'a few slender bare canes, each topped by a rosette of long, arching, wine-red strap leaves',
 		options: plant( {
 			levels: 1, angle: [ 13 ], children: [ 5, 0, 0 ], length: [ 0.1, 11, 1, 1 ], radius: [ 0.3, 0.95, 0.7, 0.7 ],

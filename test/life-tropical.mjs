@@ -3,7 +3,7 @@
 // describes, the same seed gives the same plant, and two line-ups are rendered with plain engine
 // materials (the species' bark and leaf colours, leaves as alpha-tested ovals: not the game's
 // vegetation materials).
-//   node test/life-tropical.mjs [outDir]      -> tropical-trees.png, tropical-brush.png
+//   node test/life-tropical.mjs [outDir]      -> tropical-sheet.png (each species framed), tropical-trees.png, tropical-brush.png
 import assert from 'node:assert/strict';
 import { writePNG } from './headless.mjs';
 import { GPU } from '../src/engine/gpu/GPU.js';
@@ -56,6 +56,8 @@ assert.ok( A[ 'Sea Grape' ] > 1.3, `sea grape: wider than tall (${ A[ 'Sea Grape
 assert.ok( A[ 'Banyan Fig' ] > 1.2, `banyan: a crown wider than the tree is tall (${ A[ 'Banyan Fig' ].toFixed( 2 ) })` );
 assert.ok( A[ 'Casuarina' ] < 0.7, `casuarina: tall and narrow (${ A[ 'Casuarina' ].toFixed( 2 ) })` );
 assert.ok( A[ 'Mangrove' ] > 1.3, `mangrove: low and spreading (${ A[ 'Mangrove' ].toFixed( 2 ) })` );
+assert.ok( A[ 'Flame Tree' ] > 1.15, `flame tree: a crown wider than the tree is tall (${ A[ 'Flame Tree' ].toFixed( 2 ) })` );
+assert.ok( A[ 'Tropical Almond' ] > 0.85, `tropical almond: long level branches (${ A[ 'Tropical Almond' ].toFixed( 2 ) })` );
 assert.ok( A[ 'Casuarina' ] < A[ 'Tropical Almond' ] && A[ 'Tropical Almond' ] < A[ 'Banyan Fig' ], 'casuarina < tropical almond < banyan in spread' );
 // the same seed gives the same plant, another seed another one
 {
@@ -85,11 +87,14 @@ const tonemap = new FullscreenPass( { label: 'tonemap', colorFormats: [ 'rgba8un
 		let c = textureLoad( hdr, vec2i( in.pos.xy ), 0 ).rgb;
 		let a = c * 0.8; let t = ( a * ( 2.51 * a + 0.03 ) ) / ( a * ( 2.43 * a + 0.59 ) + 0.14 );
 		return vec4f( linearToSrgb( sat3( t ) ), 1.0 ); }` } );
-const leafSurface = `
-	// an oval leaf on the quad, a midrib a little darker
+// a leaf on its quad: an ellipse as long as the quad and width times as wide (the species'
+// leafWidth: round, oval, strap, needle), with a midrib a little darker
+const leafSurfaceOf = ( width ) => `
 	let q = in.uv - vec2f( 0.5 );
-	s.alpha = 1.0 - step( 0.46, length( q * vec2f( 1.25, 1.0 ) ) );
-	s.albedo *= mix( 0.75, 1.0, smoothstep( 0.0, 0.06, abs( q.x ) ) );`;
+	s.alpha = 1.0 - step( 0.47, length( vec2f( q.x / ${ Math.max( width, 0.06 ).toFixed( 3 ) }, q.y ) ) );
+	s.albedo *= mix( 0.72, 1.0, smoothstep( 0.0, ${ ( 0.07 * Math.max( width, 0.06 ) ).toFixed( 4 ) }, abs( q.x ) ) );`;
+const barkOf = ( t ) => new Material( { name: 'bark-' + t.name, color: t.spec.bark, roughness: 0.9 } );
+const leafOf = ( t ) => new Material( { name: 'leaf-' + t.name, color: t.spec.leaf, roughness: 0.65, side: 'double', alphaTest: 0.5, surface: leafSurfaceOf( t.spec.leafWidth ) } );
 
 // names: left to right; spacing between plants and the camera are in metres
 async function lineup( file, names, { spacing, eye, target, fov = 38, post = 1.8 } ) {
@@ -102,8 +107,8 @@ async function lineup( file, names, { spacing, eye, target, fov = 38, post = 1.8
 		const t = growTropical( name, { seed: 3 + i } );
 		triangles += t.stats.branchTriangles + t.stats.leafTriangles;
 		const x = ( i - ( names.length - 1 ) / 2 ) * spacing;
-		const b = new E.Mesh( t.branches, new Material( { name: 'bark-' + name, color: t.spec.bark, roughness: 0.9 } ) );
-		const l = new E.Mesh( t.leaves, new Material( { name: 'leaf-' + name, color: t.spec.leaf, roughness: 0.65, side: 'double', alphaTest: 0.5, surface: leafSurface } ) );
+		const b = new E.Mesh( t.branches, barkOf( t ) );
+		const l = new E.Mesh( t.leaves, leafOf( t ) );
 		for ( const m of [ b, l ] ) { m.position.set( x, 0, 0 ); m.castShadow = true; scene.add( m ); }
 		// a person-high post beside each plant, for scale
 		const p = new E.Mesh( new E.BoxGeometry( 0.12, post, 0.12 ), new Material( { name: 'post-' + name, color: 0xd8d2c4, roughness: 0.8 } ) );
@@ -129,6 +134,55 @@ async function lineup( file, names, { spacing, eye, target, fov = 38, post = 1.8
 
 }
 
+// A contact sheet: every species in its own cell, the camera fitted to the plant (so a croton fills
+// its cell like a banyan does), a 1.8 m post beside it for scale. seedOf( i ): which individual.
+async function sheet( file, names, { cols = 4, CW = 600, CH = 520, seedOf = ( i ) => 3 + i } = {} ) {
+
+	const rows = Math.ceil( names.length / cols );
+	const crt = new RenderTarget( CW, CH, { colors: [ 'rgba16float', 'rgba16float', 'rgba8unorm' ], depth: 'depth32float', label: 'cell' } );
+	const cldr = new RenderTarget( CW, CH, { colors: [ 'rgba8unorm' ], label: 'cellLdr' } );
+	const ctone = new FullscreenPass( { label: 'cell tonemap', colorFormats: [ 'rgba8unorm' ], bindings: { hdr: { texture: () => crt.texture } },
+		code: `fn fragment( in: FSIn ) -> vec4f {
+			let c = textureLoad( hdr, vec2i( in.pos.xy ), 0 ).rgb;
+			let a = c * 0.8; let t = ( a * ( 2.51 * a + 0.03 ) ) / ( a * ( 2.43 * a + 0.59 ) + 0.14 );
+			return vec4f( linearToSrgb( sat3( t ) ), 1.0 ); }` } );
+	const out = new Uint8Array( cols * CW * rows * CH * 4 );
+	for ( let i = 0; i < names.length; i ++ ) {
+
+		const t = growTropical( names[ i ], { seed: seedOf( i ) } );
+		const scene = new E.Scene();
+		scene.add( new E.Mesh( new E.PlaneGeometry( 400, 400 ).rotateX( - Math.PI / 2 ), new Material( { name: 'sand' + i, color: 0xc9b98f, roughness: 0.95 } ) ) );
+		for ( const m of [ new E.Mesh( t.branches, barkOf( t ) ), new E.Mesh( t.leaves, leafOf( t ) ) ] ) { m.castShadow = true; scene.add( m ); }
+		const postH = Math.min( 1.8, t.height * 0.9 );
+		const post = new E.Mesh( new E.BoxGeometry( 0.1, postH, 0.1 ), new Material( { name: 'post' + i, color: 0xe6e0d2, roughness: 0.8 } ) );
+		post.position.set( t.radius + 0.5, postH / 2, 0 ); post.castShadow = true; scene.add( post );
+		// fit: the plant's height and its width (plus the post) inside the cell
+		const fov = 34, tan = Math.tan( fov * Math.PI / 360 );
+		const dist = Math.max( t.height * 1.25 / ( 2 * tan ), ( 2 * t.radius + 1.6 ) * 1.15 / ( 2 * tan * CW / CH ) );
+		const camera = new E.PerspectiveCamera( fov, CW / CH, 0.05, 1000 );
+		camera.position.set( dist * 0.26, t.height * 0.52 + dist * 0.1, dist * 0.96 ); camera.lookAt( 0.25, t.height * 0.46, 0 );
+		for ( let f = 0; f < 2; f ++ ) {
+
+			GPU.beginFrame();
+			setFrameCamera( camera, CW, CH );
+			shadows.render( scene, mr, shadows.update( camera, G.sunDir.value ) );
+			mr.render( scene, { camera, kind: 'main', colorViews: crt.textures.map( ( x ) => x.view() ), colorFormats: crt.formats,
+				clearColors: [ [ 0.45, 0.62, 0.86, 1 ], [ 0, 0, 0, 0 ], [ 0, 0, 0, 0 ] ], depthView: crt.depthTexture.view(), depthFormat: 'depth32float', clearDepth: 0 } );
+			ctone.render( { colorViews: [ cldr.texture ] } );
+			GPU.submit();
+
+		}
+		const img = new Uint8Array( ( await readTexture( cldr.texture ) ).data );
+		const ox = ( i % cols ) * CW, oy = Math.floor( i / cols ) * CH;
+		for ( let y = 0; y < CH; y ++ ) out.set( img.subarray( y * CW * 4, ( y + 1 ) * CW * 4 ), ( ( oy + y ) * cols * CW + ox ) * 4 );
+
+	}
+	writePNG( `${ outDir }/${ file }`, cols * CW, rows * CH, out );
+	console.log( 'wrote', file, `${ cols } x ${ rows }:`, names.join( ' | ' ) );
+
+}
+
+await sheet( 'tropical-sheet.png', TROPICAL_NAMES );
 await lineup( 'tropical-trees.png', tropicalOfKind( 'tree' ), { spacing: 17, eye: [ 4, 7, 74 ], target: [ 0, 6, 0 ] } );
 await lineup( 'tropical-brush.png', [ ...tropicalOfKind( 'brush' ), ...tropicalOfKind( 'foliage' ) ], { spacing: 4.2, eye: [ 0, 1.9, 15.5 ], target: [ 0, 1.0, 0 ] } );
 console.log( 'gpu errors', errors );
