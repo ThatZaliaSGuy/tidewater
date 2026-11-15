@@ -266,6 +266,12 @@ export class AppUI {
 		quality.addToggle( { label: 'Shadows', object: s, key: 'shadows', onChange: ( v ) => { app.shadows.enabled = v; } } );
 		s.ssr = true;
 		quality.addToggle( { label: 'Water reflections', object: s, key: 'ssr', tooltip: 'Screen-space reflections of the pier, boats and hills on the water.', onChange: ( v ) => { app.waterMaterial.params.ssr.value = v ? 1 : 0; } } );
+		if ( app.surfaceReflections ) {
+
+			s.surfaceSsr = app.surfaceReflections.enabled;
+			quality.addToggle( { label: 'Surface reflections', object: s, key: 'surfaceSsr', tooltip: 'Screen-space reflections of the scene in wet sand, wet planks, glass and paint.', onChange: ( v ) => { app.surfaceReflections.enabled = v; } } );
+
+		}
 
 		// ---------------------------------------------------------------- on-foot view (V)
 		// first / third person, at the foot of the rail; shown while on foot

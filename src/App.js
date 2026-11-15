@@ -56,6 +56,7 @@ import { AirMotes } from './fx/AirMotes.js';
 
 import { Underwater, LENS_REACH } from './post/Underwater.js';
 import { PostFX } from './post/PostFX.js';
+import { SurfaceReflections } from './post/SurfaceReflections.js';
 import { AirHaze } from './post/AirHaze.js';
 import { FlyCamera } from './player/FlyCamera.js';
 import { Player } from './player/Player.js';
@@ -254,7 +255,14 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.sceneRenderer = new SceneRenderer( engine.meshRenderer, scene, camera );
 		// the water's refraction source: the scene below the water only, half resolution
 		this.refraction = new RefractionPass( { meshRenderer: engine.meshRenderer, scene, camera, sceneRenderer: this.sceneRenderer, scale: 0.5 } );
-		this.sceneRenderer.onBeforeWater = () => this.refraction.render( G.seaLevel.value );
+		// the scene reflected in the glossy surfaces of the opaque layer (wet sand, wet planks, glass, paint)
+		this.surfaceReflections = new SurfaceReflections( { sceneRenderer: this.sceneRenderer } );
+		this.sceneRenderer.onBeforeWater = () => {
+
+			this.surfaceReflections.render();
+			this.refraction.render( G.seaLevel.value );
+
+		};
 		if ( this.sky.background ) this.sceneRenderer.background = this.sky.background;
 		// lanterns, lamp posts, path lights, lit windows, the boat's cabin / navigation lights and the
 		// flashlight (L): nearest few packed into one small uniform array each frame

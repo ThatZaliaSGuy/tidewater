@@ -310,7 +310,7 @@ struct FragOut {
 		let cur0 = vs.curClip.xy / vs.curClip.w;
 		let prev0 = vs.prevClip.xy / vs.prevClip.w;
 		so.velocity = vec4f( ( cur0 - prev0 ) * vec2f( 0.5, -0.5 ), 0.0, 1.0 );
-		so.mask = vec4f( 0.0 );
+		so.mask = vec4f( 0.0, 0.0, 0.0, 1.0 ); // (opaque: owns its pixel's mask, see below)
 		return so;
 	}
 #endif
@@ -334,7 +334,21 @@ struct FragOut {
 #else
 	r.velocity = vec4f( 0.0 );
 #endif
+#if PASS_MAIN && !PASS_LATE
+	// The scene mask blends with alpha: an opaque surface writes alpha 1 and owns its pixel's mask
+	// (it left the mask of whatever it covered before: a rock in front of swaying grass kept the
+	// grass's flag). Its r channel (free where g = 0: not water) is how glossy the surface is, for
+	// the screen-space reflections of the opaque layer (post/SurfaceReflections.js): 0 from a
+	// roughness of 0.45 up, 1 at 0.12 and below (wet sand's film, wet planks, glass, clearcoat).
+#if LIT
+	let ssrGloss = max( 1.0 - smoothstep( 0.12, 0.45, s.roughness ), s.clearcoat * ( 1.0 - smoothstep( 0.12, 0.45, s.clearcoatRoughness ) ) );
+	r.mask = vec4f( ssrGloss, 0.0, 0.0, 1.0 );
+#else
+	r.mask = vec4f( 0.0, 0.0, 0.0, 1.0 );
+#endif
+#else
 	r.mask = vec4f( 0.0 );
+#endif
 	materialOutput( in, s, &r );
 	var out: FragOut;
 	out.color = r.color;
