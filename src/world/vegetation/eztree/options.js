@@ -115,7 +115,7 @@ export default class TreeOptions {
         3: 0.7,
       },
 
-      // [Tidewater] Number of whorls (tiers) the child branches of each level are
+      // Number of whorls (tiers) the child branches of each level are
       // grouped into along their parent. 0 = spread evenly (upstream behaviour).
       whorls: {
         1: 0,
@@ -129,6 +129,15 @@ export default class TreeOptions {
         2: 0,
         3: 0,
       },
+
+      // Planar growth, 0 to 1: at 1 every branch grows in the XY plane, its
+      // children alternating to either side (a sea fan). 0 = grow in the round.
+      planar: 0,
+
+      // Bluntness of the branch tips, 0 to 1 (deciduous growth): the share of
+      // the tapered radius the tip keeps, closed with a rounded cap (corals).
+      // 0 = pointed tips.
+      tip: 0,
     };
 
     // Leaf parameters
@@ -153,8 +162,18 @@ export default class TreeOptions {
       // Where leaves start to grow on the length of the branch (0 to 1)
       start: 0,
 
-      // Size of the leaves
+      // Size of the leaves (0 = no leaves)
       size: 2.5,
+
+      // Width of a leaf as a fraction of its length (1 = square quad)
+      width: 1,
+
+      // Number of quads along a leaf. Above 1 the leaf is a blade: a ribbon
+      // that can bend (kelp, seagrass)
+      segments: 1,
+
+      // Total bend of a blade over its length (degrees), toward its face
+      curl: 0,
 
       // Variance in leaf size between each instance
       sizeVariance: 0.7,

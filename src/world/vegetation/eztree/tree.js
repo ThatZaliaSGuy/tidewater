@@ -327,6 +327,8 @@ export class Tree extends THREE.Group {
     // This information is used for generating child branches after the branch
     // geometry has been constructed
     let sections = [];
+    const tip = Math.min(1, Math.max(0, this.options.branch.tip ?? 0));
+    const planar = Math.min(1, Math.max(0, this.options.branch.planar ?? 0));
 
     for (let i = 0; i <= branch.sectionCount; i++) {
       let sectionRadius = branch.radius;
@@ -336,7 +338,16 @@ export class Tree extends THREE.Group {
         i === branch.sectionCount &&
         branch.level === this.options.branch.levels
       ) {
+        // A pointed tip, unless options.branch.tip keeps part of the tapered
+        // radius (deciduous growth): the end is then closed with a rounded cap
+        // (see below).
         sectionRadius = 0.001;
+        if (tip > 0 && this.options.type === TreeType.Deciduous) {
+          sectionRadius = Math.max(
+            0.001,
+            tip * branch.radius * (1 - this.options.branch.taper[branch.level]),
+          );
+        }
       } else if (this.options.type === TreeType.Deciduous) {
         sectionRadius *=
           1 - this.options.branch.taper[branch.level] * (i / branch.sectionCount);
@@ -362,7 +373,8 @@ export class Tree extends THREE.Group {
         Math.max(1, 1 / Math.sqrt(sectionRadius)) *
         this.options.branch.gnarliness[branch.level];
 
-      sectionOrientation.x += this.rng.random(gnarliness, -gnarliness);
+      // (planar growth: the perturbation and the twist stay in the XY plane)
+      sectionOrientation.x += this.rng.random(gnarliness, -gnarliness) * (1 - planar);
       sectionOrientation.z += this.rng.random(gnarliness, -gnarliness);
 
       // Apply growth force to the branch
@@ -370,7 +382,7 @@ export class Tree extends THREE.Group {
 
       const qTwist = new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3(0, 1, 0),
-        this.options.branch.twist[branch.level],
+        this.options.branch.twist[branch.level] * (1 - planar),
       );
 
       qSection.multiply(qTwist);
@@ -413,8 +425,31 @@ export class Tree extends THREE.Group {
       sectionOrientation.setFromQuaternion(qSection);
     }
 
+    // A blunt tip is closed with a rounded cap: a few extra rings past the last
+    // section, on a hemisphere of the radius of the tip. They are only meshed:
+    // child branches and leaves are still placed along the sections above.
+    let meshSections = sections;
+    const last = sections[sections.length - 1];
+    if (
+      tip > 0 &&
+      branch.level === this.options.branch.levels &&
+      last.radius > 0.001
+    ) {
+      meshSections = sections.slice();
+      const along = new THREE.Vector3(0, 1, 0).applyEuler(last.orientation);
+      const rings = 3;
+      for (let k = 1; k <= rings; k++) {
+        const theta = (k / rings) * (Math.PI / 2);
+        meshSections.push({
+          origin: last.origin.clone().addScaledVector(along, last.radius * Math.sin(theta)),
+          orientation: last.orientation.clone(),
+          radius: k === rings ? 0.001 : last.radius * Math.cos(theta),
+        });
+      }
+    }
+
     this.skeleton.branches.push({
-      sections,
+      sections: meshSections,
       segmentCount: branch.segmentCount,
       baseRadius: branch.radius,
     });
@@ -470,7 +505,7 @@ export class Tree extends THREE.Group {
     const startMin = this.options.branch.start[level];
     const heightStep = (1.0 - startMin) / count;
     const angleSlots = this.shuffledIndices(count);
-    // [Tidewater] Optional whorls: with options.branch.whorls[level] = W > 0 the
+    // Optional whorls: with options.branch.whorls[level] = W > 0 the
     // children are grouped into W tiers along the parent instead of being spread
     // evenly. See the whorl branches below; 0 / undefined keeps upstream behaviour.
     const whorls = Math.min(count, Math.max(0, Math.floor(this.options.branch.whorls?.[level] ?? 0)));
@@ -479,7 +514,7 @@ export class Tree extends THREE.Group {
       // Stratified sampling along the parent's length: jitter within slot [i, i+1]
       // so children are spread evenly but not perfectly periodic.
       let childBranchStart = startMin + (i + this.rng.random()) * heightStep;
-      // [Tidewater] In a whorl every child starts at the tier's height (a small
+      // In a whorl every child starts at the tier's height (a small
       // jitter keeps the bases from coinciding).
       const whorlIndex = whorls > 0 ? Math.floor((i * whorls) / count) : 0;
       if (whorls > 0) {
@@ -531,7 +566,7 @@ export class Tree extends THREE.Group {
       // length depends on height) spiral their longest branches to a fixed side.
       const radialJitter = this.rng.random(0.5, -0.5);
       let radialAngle = 2.0 * Math.PI * (radialOffset + (angleSlots[i] + radialJitter) / count);
-      // [Tidewater] In a whorl the tier's children are spread evenly around the
+      // In a whorl the tier's children are spread evenly around the
       // parent (slightly jittered), and each tier is turned against the one below
       // by the golden angle so the tiers don't stack their branches.
       if (whorls > 0) {
@@ -552,9 +587,31 @@ export class Tree extends THREE.Group {
       );
       const q3 = new THREE.Quaternion().setFromEuler(parentOrientation);
 
-      const childBranchOrientation = new THREE.Euler().setFromQuaternion(
-        q3.multiply(q2.multiply(q1)),
-      );
+      const qChild = q3.multiply(q2.multiply(q1));
+      // Planar growth (options.branch.planar, 0 to 1): the child leaves its
+      // parent inside the XY plane, at the angle of its level, alternately to
+      // one side and the other (a fan). In between, the two orientations are
+      // blended.
+      const planar = Math.min(1, Math.max(0, this.options.branch.planar ?? 0));
+      if (planar > 0) {
+        const parentDir = new THREE.Vector3(0, 1, 0).applyEuler(parentOrientation);
+        parentDir.z = 0;
+        if (parentDir.lengthSq() < 1e-8) parentDir.set(0, 1, 0);
+        parentDir.normalize();
+        const side = (i % 2 === 0) === (radialOffset < 0.5) ? 1 : -1;
+        const a = (side * this.options.branch.angle[level]) / (180 / Math.PI);
+        const flat = new THREE.Vector3(
+          parentDir.x * Math.cos(a) - parentDir.y * Math.sin(a),
+          parentDir.x * Math.sin(a) + parentDir.y * Math.cos(a),
+          0,
+        );
+        const qFlat = new THREE.Quaternion().setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          flat,
+        );
+        qChild.slerp(qFlat, planar);
+      }
+      const childBranchOrientation = new THREE.Euler().setFromQuaternion(qChild);
 
       let childBranchLength =
         this.options.branch.length[level] *
@@ -682,11 +739,58 @@ export class Tree extends THREE.Group {
 
     const { origin, orientation } = leaf;
 
+    // A size of 0 means no leaves (corals)
+    if (!(leaf.size * scale > 0)) return;
+
     // Width and length of the leaf quad
     const leafSize = leaf.size * scale;
 
-    const W = leafSize;
+    // options.leaves.width: the width of the quad as a fraction of its length
+    const W = leafSize * (this.options.leaves.width ?? 1);
     const L = leafSize;
+
+    // Blades (options.leaves.segments > 1): a ribbon of that many quads along
+    // the leaf, bent by options.leaves.curl degrees over its length.
+    const bladeSegments = Math.max(1, Math.floor(this.options.leaves.segments ?? 1));
+    if (bladeSegments > 1) {
+      const curl = ((this.options.leaves.curl ?? 0) * Math.PI) / 180;
+      const createBlade = (rotation) => {
+        const rot = new THREE.Euler(0, rotation, 0);
+        const step = L / bladeSegments;
+        // walk an arc in the YZ plane of the leaf: the blade bends toward its face
+        let y = 0;
+        let z = 0;
+        for (let k = 0; k <= bladeSegments; k++) {
+          const t = k / bladeSegments;
+          const bend = curl * t;
+          for (const x of [-W / 2, W / 2]) {
+            const v = new THREE.Vector3(x, y, z)
+              .applyEuler(rot)
+              .applyEuler(orientation)
+              .add(origin);
+            const n = new THREE.Vector3(0, -Math.sin(bend), Math.cos(bend))
+              .applyEuler(rot)
+              .applyEuler(orientation);
+            buffers.verts.push(v.x, v.y, v.z);
+            buffers.normals.push(n.x, n.y, n.z);
+            buffers.uvs.push(x < 0 ? 0 : 1, t);
+          }
+          if (k < bladeSegments) {
+            const a = i + 2 * k;
+            buffers.indices.push(a, a + 1, a + 3, a, a + 3, a + 2);
+            const mid = curl * ((k + 0.5) / bladeSegments);
+            y += step * Math.cos(mid);
+            z += step * Math.sin(mid);
+          }
+        }
+        i += 2 * (bladeSegments + 1);
+      };
+      createBlade(0);
+      if (billboard === Billboard.Double) {
+        createBlade(Math.PI / 2);
+      }
+      return;
+    }
 
     const createLeaf = (rotation) => {
       // Create quad vertices
