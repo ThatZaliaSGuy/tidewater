@@ -188,6 +188,40 @@ export default class TreeOptions {
       roundedNormals: true,
     };
 
+    // Health of the tree, 1 to 0: a dying tree loses leaves (the rest brown),
+    // sheds twigs, and its bark bleaches. 0 = a dead tree.
+    this.health = 1;
+
+    // Seasons (see season.js)
+    this.season = {
+      // Whether the time of year changes the foliage. Snow and health work
+      // either way.
+      enabled: false,
+
+      // Time of year, 0 to 1: 0 midwinter, 0.25 spring, 0.5 midsummer,
+      // 0.75 autumn
+      time: 0.5,
+
+      // 'auto' (deciduous growth sheds, evergreen keeps), 'deciduous',
+      // 'evergreen' or 'none'
+      response: 'auto',
+
+      // The colours leaves turn in autumn: each leaf takes one
+      autumnTints: [0xe0a020, 0xd2691e, 0xa8321e],
+
+      // Colour of the fresh leaves in spring
+      springTint: 0xb9d86a,
+
+      // Share of the leaves that open as blossom in spring (0 to 1)
+      blossom: 0,
+
+      // Colour of the blossom
+      blossomTint: 0xffd7e8,
+
+      // Snow cover, 0 to 1: surfaces that face up turn white
+      snow: 0,
+    };
+
     // Trellis parameters
     this.trellis = {
       // Whether trellis is enabled

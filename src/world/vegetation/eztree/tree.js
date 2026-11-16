@@ -2,6 +2,7 @@ import * as THREE from './three-shim.js';
 import RNG from './rng.js';
 import { Branch } from './branch.js';
 import { Billboard, TreeType } from './enums.js';
+import { seasonState, leafSeason, twigAlive, barkTint } from './season.js';
 import TreeOptions from './options.js';
 import { loadPreset } from './presets.js';
 import { Trellis } from './trellis.js';
@@ -36,6 +37,8 @@ export class Tree extends THREE.Group {
     this.add(this.branchesMesh);
     this.add(this.leavesMesh);
     this.options = options;
+    // Shared by the bark and leaf materials (and every LOD level)
+    this.snowUniform = { value: 0 };
   }
 
   update(elapsedTime) {
@@ -59,6 +62,8 @@ export class Tree extends THREE.Group {
    * @param {TreeOptions} json 
    */
   loadFromJson(json) {
+    // (a preset that says nothing about its health is a healthy plant)
+    this.options.health = 1;
     this.options.copy(json);
     this.generate();
   }
@@ -298,12 +303,42 @@ export class Tree extends THREE.Group {
       uvs: [],
     };
 
-    for (const skeletonBranch of this.skeleton.branches) {
+    // Seasons and health (see season.js): which leaves and twigs are on the
+    // tree, and the colour each leaf has turned. Decided per index, without
+    // random numbers, so the skeleton is untouched.
+    const season = seasonState(this.options);
+    const lastLevel = this.options.branch.levels;
+    const shed = new Set();
+
+    this.skeleton.branches.forEach((skeletonBranch, index) => {
+      if (
+        season.health < 1 &&
+        lastLevel > 0 &&
+        skeletonBranch.level === lastLevel &&
+        !twigAlive(season.health, index)
+      ) {
+        shed.add(index);
+        return;
+      }
       this.#meshBranch(branches, skeletonBranch, sectionStride, segmentFactor);
-    }
+    });
+
+    if (season.active) leaves.season = [];
 
     for (let i = 0; i < this.skeleton.leaves.length; i += leafStride) {
-      this.#meshLeaf(leaves, this.skeleton.leaves[i], leafScale, billboard);
+      const leaf = this.skeleton.leaves[i];
+      if (!season.active) {
+        this.#meshLeaf(leaves, leaf, leafScale, billboard);
+        continue;
+      }
+      if (shed.has(leaf.branch)) continue;
+      const state = leafSeason(season, this.options, i);
+      if (!state.keep) continue;
+      const first = leaves.verts.length / 3;
+      this.#meshLeaf(leaves, leaf, leafScale, billboard);
+      for (let v = first; v < leaves.verts.length / 3; v++) {
+        leaves.season.push(state.color[0], state.color[1], state.color[2], state.mix);
+      }
     }
 
     return { branches, leaves };
@@ -449,6 +484,7 @@ export class Tree extends THREE.Group {
     }
 
     this.skeleton.branches.push({
+      level: branch.level,
       sections: meshSections,
       segmentCount: branch.segmentCount,
       baseRadius: branch.radius,
@@ -724,6 +760,8 @@ export class Tree extends THREE.Group {
       origin: origin.clone(),
       orientation: orientation.clone(),
       size,
+      // the branch the leaf grows on (the one grown last)
+      branch: this.skeleton.branches.length - 1,
     });
   }
 
@@ -984,6 +1022,13 @@ export class Tree extends THREE.Group {
       'uv',
       new THREE.BufferAttribute(new Float32Array(buffers.uvs), 2),
     );
+    if (buffers.season) {
+      // per leaf: the colour it has turned (rgb) and how far (a)
+      g.setAttribute(
+        'season',
+        new THREE.BufferAttribute(new Float32Array(buffers.season), 4),
+      );
+    }
     g.setIndex(
       new THREE.BufferAttribute(new Uint16Array(buffers.indices), 1),
     );
@@ -999,10 +1044,19 @@ export class Tree extends THREE.Group {
     const mat = new THREE.MeshStandardMaterial({
       name: 'branches',
       flatShading: this.options.bark.flatShading,
-      color: new THREE.Color(this.options.bark.tint),
+      color: new THREE.Color(barkTint(this.options.bark.tint, this.options.health ?? 1)),
       metalness: 0.0,
       roughness: 1.0,
     });
+
+    mat.onBeforeCompile = (shader) => {
+      this.#addSnow(shader);
+      Object.defineProperty(mat.userData, 'shader', {
+        value: shader,
+        configurable: true,
+        enumerable: false,
+      });
+    };
 
     if (this.options.bark.textured) {
       // textureScale.x is baked into UVs during meshing (wrapsX), so only
@@ -1034,6 +1088,38 @@ export class Tree extends THREE.Group {
   }
 
   /**
+   * Adds snow cover to a material's shader: surfaces that face up turn white,
+   * the more of them the higher the `uSnow` uniform (0 to 1). The uniform is
+   * shared by the tree's materials, see setSnow().
+   * @param {{ uniforms: object, fragmentShader: string }} shader
+   */
+  #addSnow(shader) {
+    shader.uniforms.uSnow = this.snowUniform;
+    shader.fragmentShader =
+      `uniform float uSnow;\n` +
+      shader.fragmentShader.replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        if (uSnow > 0.0) {
+          vec3 ezUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+          float ezFacing = dot(normalize(normal), ezUp);
+          float ezLine = mix(1.0, -0.1, uSnow);
+          float ezCover = smoothstep(ezLine, ezLine + 0.3, ezFacing);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.94, 1.0), ezCover);
+        }`,
+      );
+  }
+
+  /**
+   * Sets the snow cover (0 none .. 1 deep) without regenerating the tree
+   * @param {number} amount
+   */
+  setSnow(amount) {
+    this.options.season.snow = amount;
+    this.snowUniform.value = Math.min(1, Math.max(0, amount));
+  }
+
+  /**
    * Generates the geometry for the branches
    */
   createBranchesGeometry() {
@@ -1062,6 +1148,12 @@ export class Tree extends THREE.Group {
       dithering: true
     });
 
+    // Leaves carry a `season` attribute while the seasons (or the tree's
+    // health) change them: the shader is compiled with or without it.
+    const seasonal = seasonState(this.options).active;
+    this.snowUniform.value = Math.min(1, Math.max(0, this.options.season?.snow ?? 0));
+    mat.customProgramCacheKey = () => (seasonal ? 'ez-leaves-season' : 'ez-leaves');
+
     // Add custom shader code for branch swaying
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = { value: 0 };
@@ -1069,6 +1161,29 @@ export class Tree extends THREE.Group {
       shader.uniforms.uWindFrequency = { value: 0.5 };
       shader.uniforms.uWindScale = { value: 70 };
       shader.uniforms.uCustomNormals = { value: this.options.leaves.roundedNormals };
+
+      this.#addSnow(shader);
+      if (seasonal) {
+        // The turned colour replaces the leaf's hue and keeps its shading
+        shader.vertexShader =
+          `attribute vec4 season;\nvarying vec4 vSeason;\n` +
+          shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            '#include <begin_vertex>\n        vSeason = season;',
+          );
+        shader.fragmentShader =
+          `varying vec4 vSeason;\n` +
+          shader.fragmentShader.replace(
+            '#include <color_fragment>',
+            `#include <color_fragment>
+            float ezLuma = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+            diffuseColor.rgb = mix(
+              diffuseColor.rgb,
+              vSeason.rgb * min(1.0, 0.35 + 2.4 * ezLuma),
+              vSeason.a
+            );`,
+          );
+      }
 
       shader.vertexShader = `
         uniform float uTime;

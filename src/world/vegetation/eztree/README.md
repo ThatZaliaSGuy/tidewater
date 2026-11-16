@@ -12,7 +12,8 @@ The library sources of `src/lib` upstream, run on Tidewater's engine instead of 
 | File | Upstream | Changes |
 |---|---|---|
 | `branch.js`, `trellis.js`, `enums.js`, `rng.js`, `index.js` | same names in `src/lib` | import paths only: `'three'` -> `./three-shim.js`, `.js` extensions added, `./presets/index` -> `./presets.js` |
-| `tree.js`, `options.js` | same names in `src/lib` | the import paths, plus the options below. They are the files of the `sea-presets` branch of https://github.com/ThatZaliaSGuy/ez-tree |
+| `tree.js`, `options.js` | same names in `src/lib` | the import paths, plus the options below. They are the files of https://github.com/ThatZaliaSGuy/ez-tree (branch `seasons-regions`) |
+| `season.js` | `src/lib/season.js` of the fork | none |
 | `presets.js` | `src/lib/presets/*.json` + `presets/index.js` | the 16 JSON presets as one JS module (JSON imports need a bundler; Tidewater's tests run the sources in Node). Same data, same `TreePreset` / `loadPreset` |
 | `three-shim.js` | new (Tidewater) | the engine's three-compatible classes, plus inert stand-ins for `MeshStandardMaterial`, `Texture`, `LOD`, `RepeatWrapping` and `ShaderChunk` |
 | `LICENSE` | `LICENSE` | unchanged |
@@ -40,6 +41,19 @@ Also off by default, with the same guarantee (the stock presets grow identical t
   closed with a rounded cap (corals).
 - `leaves.width`, `leaves.segments`, `leaves.curl`: narrow ribbon leaves of several quads that
   bend along their length (kelp, seagrass). A leaf `size` of 0 grows no leaves.
+
+## Added: seasons, snow and health
+
+`options.season` (time of year: spring buds and blossom, autumn colour and leaf fall, bare winter
+trees), `options.season.snow` and `options.health` (dying and dead trees). Which leaves and twigs
+are on the tree, and each leaf's turned colour (a `season` attribute on the leaf geometry, present
+only while in use), are decided per index without random numbers: a seed grows the same tree all
+year. The snow and the leaf colours are shader code for three.js materials, which Tidewater's
+engine does not run (`three-shim.js`): here only the geometry side takes effect, until Tidewater's
+vegetation materials read the attribute.
+
+The fork also has the regions registry (`regions.js`) and its presets, not vendored here: the
+tropical ones came from `../TropicalPlants.js`.
 
 The fork also has six sea presets (staghorn and finger coral, sea fan, sea whip, giant kelp,
 seagrass) as JSON in `src/lib/presets`; they are not vendored here. Tidewater's reef is built by
