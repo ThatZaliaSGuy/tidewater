@@ -1,4 +1,5 @@
 import { FISH, fishLengthCm } from './FishTable.js';
+import { isTouch } from '../core/TouchText.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
 import { SOUVENIRS, souvenirCounts } from './Souvenirs.js';
 import { FishPortrait } from './FishPortrait.js';
@@ -364,7 +365,7 @@ export class GameHUD {
 					<div class="gm-stat is-value"><span>Value</span><b>${ formatCurrency( info.value ) }</b><i>${ t( info.kept ? 'in the cooler' : 'let go' ) }</i></div>
 				</div>
 				${ note }
-				<div class="gm-catch-foot"><kbd>Click</kbd> or <kbd>E</kbd> to continue<span class="gm-catch-timer"><span></span></span></div>
+				<div class="gm-catch-foot">${ isTouch() ? 'Tap <b>Cast</b> or <b>Use</b> to continue' : '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>
 			</div>` );
 		// restart the entrance even when a card is already up
 		c.classList.remove( 'is-on' );
@@ -423,7 +424,7 @@ export class GameHUD {
 			<div class="gm-list">${ rows || '<div class="gm-empty">Nothing yet. Cast from the pier, the beach or the boat.</div>' }</div>
 			${ logged ? `<div class="gm-log"><b>Fish log</b><br>${ logged }</div>` : '' }
 			${ owned.length ? `<div class="gm-souvenirs"><b id="gm-souv-h">Souvenirs</b><ul aria-labelledby="gm-souv-h">${ owned.map( ( [ it, n ] ) => `<li><span>${ it.name }</span><span class="gm-souv-n">${ n > 1 ? `x ${ n }` : '' }</span></li>` ).join( '' ) }</ul></div>` : '' }
-			<div class="gm-foot"><span class="gm-sub">Sell at the fish stand by the pier</span><button class="gm-btn is-ghost" data-close>Close (I)</button></div>` );
+			<div class="gm-foot"><span class="gm-sub">Sell at the fish stand by the pier</span><button class="gm-btn is-ghost" data-close>${ isTouch() ? 'Close' : 'Close (I)' }</button></div>` );
 		this.inv.querySelector( '[data-close]' ).onclick = () => this.toggleInventory( false );
 		for ( const b of this.inv.querySelectorAll( '[data-release]' ) ) b.onclick = () => s.release( Number( b.dataset.release ) );
 
@@ -459,7 +460,7 @@ export class GameHUD {
 			<h2>${ v.name }</h2>
 			<p class="gm-sub">${ t( s.inventory.length ? v.greeting || 'Let\'s see what you caught. Fair prices, cash.' : v.idle || 'Nothing to sell? The grunts are biting off the pier.' ) }</p>
 			<div class="gm-list">${ rows || '<div class="gm-empty">Your cooler is empty.</div>' }</div>
-			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>Leave (E)</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>Sell all · ${ formatCurrency( s.holdValue ) }</button></div>` );
+			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>${ isTouch() ? 'Leave' : 'Leave (E)' }</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>Sell all · ${ formatCurrency( s.holdValue ) }</button></div>` );
 		this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
 		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
 		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
@@ -489,7 +490,7 @@ GameHUD.prototype.renderShop = function () {
 		<h2>${ t( v.name ) }</h2>
 		<p class="gm-sub">${ t( '{greeting} · You have {amount}', { greeting: t( v.greeting ), amount: formatCurrency( s.money ) } ) }</p>
 		<div class="gm-list">${ fuelRow }${ rows }</div>
-		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>Leave (E)</button></div>` );
+		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ isTouch() ? 'Leave' : 'Leave (E)' }</button></div>` );
 	this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
 	for ( const b of this.stand.querySelectorAll( '[data-buy]' ) ) b.onclick = () => this.game.buy( b.dataset.buy );
 	const f = this.stand.querySelector( '[data-fuel]' );
@@ -508,7 +509,7 @@ GameHUD.prototype.renderGifts = function () {
 		<h2>${ v.name }</h2>
 		<p class="gm-sub">${ v.greeting } · You have $${ s.money.toLocaleString() }</p>
 		<div class="gm-list gm-gifts">${ rows }</div>
-		<div class="gm-foot"><span class="gm-sub">Souvenirs go in your inventory (I)</span><button class="gm-btn is-ghost" data-close>Leave (E)</button></div>`;
+		<div class="gm-foot"><span class="gm-sub">Souvenirs go in your inventory (I)</span><button class="gm-btn is-ghost" data-close>${ isTouch() ? 'Leave' : 'Leave (E)' }</button></div>`;
 	this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
 	for ( const b of this.stand.querySelectorAll( '[data-souvenir]' ) ) b.onclick = () => this.game.buySouvenir( b.dataset.souvenir );
 

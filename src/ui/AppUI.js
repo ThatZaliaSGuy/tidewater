@@ -272,7 +272,7 @@ export class AppUI {
 
 		} } );
 		quality.addToggle( { label: 'Shadows', object: s, key: 'shadows', onChange: ( v ) => { app.shadows.enabled = v; } } );
-		s.ssr = true;
+		s.ssr = app.waterMaterial.params.ssr.value > 0;
 		quality.addToggle( { label: 'Water reflections', object: s, key: 'ssr', tooltip: 'Screen-space reflections of the pier, boats and hills on the water.', onChange: ( v ) => { app.waterMaterial.params.ssr.value = v ? 1 : 0; } } );
 		if ( app.surfaceReflections ) {
 

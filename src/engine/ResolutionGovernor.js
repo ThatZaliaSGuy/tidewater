@@ -27,6 +27,9 @@ export class ResolutionGovernor {
 
 		this.engine = engine;
 		this.maxDpr = Math.min( 2, Math.max( 1, window.devicePixelRatio || 1 ) );
+		this.budget = BUDGET_MS;
+		this.goodMs = GOOD_MS;
+		this.floor = [ 0.85, 0.7 ]; // render scales under DPR 1
 		let m = 'auto';
 		try { m = localStorage.getItem( KEY ) || 'auto'; } catch { /* storage blocked: default */ }
 		this.mode = [ 'auto', 'retina', 'standard' ].includes( m ) ? m : 'auto';
@@ -53,8 +56,23 @@ export class ResolutionGovernor {
 		const out = [];
 		for ( const d of [ 2, 1.5, 1 ] ) if ( d <= this.maxDpr + 1e-3 ) out.push( { dpr: d, scale: 1 } );
 		if ( ! out.length || out[ 0 ].dpr < this.maxDpr - 1e-3 ) out.unshift( { dpr: this.maxDpr, scale: 1 } );
-		for ( const s of [ 0.85, 0.7 ] ) out.push( { dpr: 1, scale: s } );
+		for ( const s of this.floor ) out.push( { dpr: 1, scale: s } );
 		return out;
+
+	}
+
+	// A phone (the app's lite profile): 30 frames a second is the target, the screen's own pixel
+	// density is capped at 1.5, it starts at DPR 1 and works up, and the render scale may go down
+	// to half. Call before the first frame.
+	setLite() {
+
+		this.maxDpr = Math.min( 1.5, this.maxDpr );
+		this.budget = 36;
+		this.goodMs = 26;
+		this.floor = [ 0.85, 0.7, 0.6, 0.5 ];
+		this.levels = this._levels();
+		this.index = Math.max( 0, this.levels.findIndex( ( l ) => l.dpr === 1 && l.scale === 1 ) );
+		if ( this.mode !== 'standard' ) this._apply( this.levels[ this.index ], 'lite' );
 
 	}
 
@@ -128,7 +146,7 @@ export class ResolutionGovernor {
 		if ( sum < WINDOW * 1000 * 0.95 ) return;
 		const sorted = [ ...this.samples ].sort( ( a, b ) => a - b );
 		const median = sorted[ sorted.length >> 1 ];
-		if ( median > BUDGET_MS && this.index < this.levels.length - 1 ) {
+		if ( median > this.budget && this.index < this.levels.length - 1 ) {
 
 			// a level we just stepped up to failed: wait twice as long before trying it again
 			if ( this.lastUp === this.index + 1 ) this.backoff = Math.min( this.backoff * 2, 240 );
@@ -139,7 +157,7 @@ export class ResolutionGovernor {
 
 		}
 
-		if ( median <= GOOD_MS ) this.good += dt; else this.good = 0;
+		if ( median <= this.goodMs ) this.good += dt; else this.good = 0;
 		if ( this.good >= this.backoff && this.index > 0 ) {
 
 			this.lastUp = this.index;

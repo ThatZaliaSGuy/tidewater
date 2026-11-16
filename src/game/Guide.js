@@ -1,4 +1,5 @@
 import { STAND } from './FishStand.js';
+import { isTouch, touchKey, touchText } from '../core/TouchText.js';
 import { CHANDLERY } from './Chandlery.js';
 import { t, translateHTML } from '../i18n/index.js';
 
@@ -63,8 +64,9 @@ const CSS = /* css */`
 @media (prefers-reduced-motion: reduce) { .gm-guide-card, .gm-coach { transform: none !important; } }
 `;
 
-const k = ( ...keys ) => keys.map( ( x ) => `<kbd>${ x }</kbd>` ).join( '' );
-const row = ( keys, text ) => `<div class="gm-guide-row"><span class="k">${ keys }</span><span>${ text }</span></div>`;
+// (on a touch screen the keys are the on-screen buttons, and rows about the keyboard go: core/TouchText.js)
+const k = ( ...keys ) => ( isTouch() && keys.join( '' ) === 'WASD' ? [ 'Stick' ] : keys ).map( ( x ) => `<kbd>${ touchKey( x ) }</kbd>` ).join( '' );
+const row = ( keys, text ) => isTouch() && keys.includes( 'F1' ) ? '' : `<div class="gm-guide-row"><span class="k">${ keys }</span><span>${ touchText( text ) }</span></div>`;
 
 const CARDS = [
 	{
@@ -371,7 +373,7 @@ export class Guide {
 			this._current = id;
 			this.seen[ id ] = true;
 			this._save();
-			this.coachText.textContent = t( TIPS[ id ] );
+			this.coachText.textContent = touchText( t( TIPS[ id ] ) );
 			this.coach.classList.add( 'is-on' );
 			this._coachT = 7.5;
 

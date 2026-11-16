@@ -6,7 +6,7 @@ import { FrameUniforms } from './engine/render/Frame.js';
 
 import { Engine } from './core/Engine.js';
 import { Input } from './core/Input.js';
-import { TouchControls } from './core/TouchControls.js';
+import { TouchControls, wantsTouch } from './core/TouchControls.js';
 import { CDLOD } from './core/CDLOD.js';
 import { G } from './core/Globals.js';
 import { Profiler } from './core/Profiler.js';
@@ -118,6 +118,11 @@ export class App {
 		await progress( 0.02, 'Starting WebGPU…' );
 		const engine = this.engine = new Engine( document.getElementById( 'app' ) );
 		await engine.init();
+		// The lite profile, for phones and tablets (?lite forces it, ?lite=0 turns it off): a lower
+		// resolution with a 30 frames a second target, smaller shadow maps, and the costliest optional
+		// effects off (ground fog, caustics, motion blur, the screen-space reflections and bounce).
+		const lite = this.lite = qs.has( 'lite' ) ? qs.get( 'lite' ) !== '0' : wantsTouch();
+		if ( lite ) engine.resolution.setLite();
 		// systems take `renderer` first as in the three.js version: it is the Engine now (GPU access is global)
 		const renderer = engine;
 		const { scene, camera } = engine;
@@ -154,7 +159,7 @@ export class App {
 		// contact-hardening filter sized by the sun's disc on the near cascade. Each cascade's depth range
 		// is its light margin (200 m) + its extent, which keeps the depth bias small in metres.
 		// Shadows come from the opaque and the late (transparent-pass) layers.
-		this.csm = this.shadows = new SunShadows( { size: 2048, splits: [ 10, 60, 400 ], lightMargin: 200, normalBias: [ 0.015, 0.06, 0.3 ], bias: 0.00002 } );
+		this.csm = this.shadows = new SunShadows( { size: lite ? 1024 : 2048, splits: [ 10, 60, 400 ], lightMargin: 200, normalBias: [ 0.015, 0.06, 0.3 ], bias: 0.00002 } );
 		this.shadows.layerMask = ( 1 << LAYERS.OPAQUE ) | ( 1 << LAYERS.TRANSPARENT );
 
 		this.environment = new Environment( renderer, scene, this.sky );
@@ -213,7 +218,7 @@ export class App {
 		this.surface.detail = this.seaDetail;
 		this.shore = new ShoreWaves( this.terrainGPU );
 		this.surface.shore = this.shore;
-		this.caustics = qs.has( 'noCaustics' ) ? null : new Caustics( renderer, this.fft );
+		this.caustics = qs.has( 'noCaustics' ) || lite ? null : new Caustics( renderer, this.fft );
 		if ( this.caustics ) this.caustics.detail = this.seaDetail;
 
 		if ( ! qs.has( 'noSim' ) ) {
@@ -387,7 +392,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// aerial perspective, marine haze and volumetric sun shafts (post)
 		// ground fog: a simulated field (mist in the hollows and on the lagoon at dawn, banks on the
 		// slopes) the haze passes march and composite. ?fog=0..1 sets how much the air makes.
-		this.fog = qs.has( 'noHaze' ) || qs.has( 'noFog' ) ? null : new GroundFog( { terrain: this.terrainData, clouds: this.clouds } );
+		this.fog = qs.has( 'noHaze' ) || qs.has( 'noFog' ) || ( lite && ! qs.has( 'fog' ) ) ? null : new GroundFog( { terrain: this.terrainData, clouds: this.clouds } );
 		if ( this.fog && qs.has( 'fog' ) ) this.fog.amount = Math.min( 1, Math.max( 0, Number( qs.get( 'fog' ) ) || 0 ) );
 		this.haze = qs.has( 'noHaze' ) ? null : new AirHaze( {
 			depthTexture: this.sceneRenderer.sceneRT.depthTexture, underwater: this.underwater, atmosphere: this.atmosphere,
@@ -395,6 +400,16 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		} );
 		this.post = new PostFX( renderer, { sceneRenderer: this.sceneRenderer, camera, underwater: this.underwater, clouds: this.clouds, sunDir: this.atmosphere.sunDir, haze: this.haze } );
 		G.exposure.value = this.settings.exposure;
+		if ( lite ) {
+
+			if ( this.post.motionBlur ) this.post.motionBlur.shutter.value = 0;
+			if ( this.post.flare ) this.post.flare.strength.value = 0;
+			this.post.params.bounceStrength.value = 0;
+			if ( this.surfaceReflections ) this.surfaceReflections.enabled = false;
+			this.waterMaterial.params.ssr.value = 0;
+
+		}
+
 		if ( qs.has( 'scale' ) ) this.settings.renderScale = Number( qs.get( 'scale' ) ) || 1;
 		this.setRenderScale( this.settings.renderScale );
 
@@ -721,6 +736,8 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 	// Which set of touch buttons fits what the player is doing (core/TouchControls.js SETS).
 	touchState() {
 
+		const game = this.game;
+		if ( game?.hud?.invOpen || game?.hud?.standOpen || game?.atm?.open || game?.guide?.open ) return 'menu';
 		if ( this.freeCam ) return 'fly';
 		if ( this.rally?.active ) return 'car';
 		const mode = this.player?.mode;

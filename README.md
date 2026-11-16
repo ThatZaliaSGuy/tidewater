@@ -135,6 +135,7 @@ Add these to the URL, for example `?fly&noAudio`:
 | `noFog` | Skip the ground fog |
 | `fog=0..1` | How readily the air makes ground fog (default 0.6) |
 | `touch` | Touch controls on (`touch=0`: off). On by default where the main pointer is a finger |
+| `lite` | The phone profile (`lite=0`: off; on by default with touch): 30 fps target, lower resolution floor, 1024 shadow maps, no ground fog, caustics, motion blur, flare or screen-space reflections and bounce |
 | `baseLimits` | Ask the GPU only for what every WebGPU device has (no optional features, default limits), to check a phone's path on a desktop |
 | `noCaustics` | Skip caustics |
 | `noVeg` | Skip vegetation |

@@ -2,6 +2,8 @@
 // fading key hints and the recover prompt. Pure presentation over RallyDrive
 // state; the cluster doubles as the `Rally telemetry` status the specs read.
 
+import { touchText } from '../core/TouchText.js';
+
 // Presentation extras only; physics tuning stays in Vehicles.js.
 const CARS = {
 	aster: { tag: 'RWD coupe', idle: 850, redline: 7200 },
@@ -226,7 +228,7 @@ export class DriveHUD {
 			this.recoverWhy.textContent = this.flip > 1.5 ? 'The car is on its roof' : 'The car is adrift';
 			// A driver on a gamepad is told the pad's button (Y recovers there).
 			const key = rally.gamepad?.() ? 'Y' : 'R';
-			if ( this.recoverKey.textContent !== key ) { this.recoverKey.textContent = key; this.recoverText.textContent = `Press ${ key } to recover`; }
+			if ( this.recoverKey.textContent !== key ) { this.recoverKey.textContent = key; this.recoverText.textContent = touchText( `Press ${ key } to recover` ); }
 		}
 
 		const sound = rally.sound, on = sound.enabled && ! sound.disabled;

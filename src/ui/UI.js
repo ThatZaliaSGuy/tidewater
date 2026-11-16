@@ -1,4 +1,5 @@
 import { icon, brandMark } from './icons.js';
+import { isTouch, touchKey, touchText } from '../core/TouchText.js';
 import { t, translateHTML, localizeDOM } from '../i18n/index.js';
 
 // Tidewater UI: settings panel (tabs → folders → controls), HUD, help,
@@ -2194,7 +2195,7 @@ export class UI {
 			<div class="tw-start-inner">
 				${ brandMark( 'tw-start-mark' ) }
 				<div class="tw-start-title">TIDEWATER</div>
-				<button type="button" class="tw-start-cta"><span class="tw-start-pulse" aria-hidden="true"></span>${ icon( 'mouse' ) }<span>Click to explore</span></button>
+				<button type="button" class="tw-start-cta"><span class="tw-start-pulse" aria-hidden="true"></span>${ isTouch() ? '' : icon( 'mouse' ) }<span>${ isTouch() ? 'Tap to explore' : 'Click to explore' }</span></button>
 				<div class="tw-start-keys">
 					<span><span class="tw-wasd"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>Move</span>
 					<span><kbd class="tw-kbd-ico">${ icon( 'mouse' ) }</kbd>Look</span>
@@ -2732,9 +2733,11 @@ export class UI {
 
 				this._pKey = k;
 				this._pText = txt;
-				this.promptKey.textContent = k;
-				this.promptKey.classList.toggle( 'is-wide', k.length > 1 );
-				this.promptText.textContent = t( txt );
+				// (on a touch screen the key is the button that does it, core/TouchText.js)
+				const shown = touchKey( k );
+				this.promptKey.textContent = t( shown );
+				this.promptKey.classList.toggle( 'is-wide', shown.length > 1 );
+				this.promptText.textContent = touchText( t( txt ) );
 				this.promptEl.classList.remove( 'is-bump' );
 				void this.promptEl.offsetWidth;
 				this.promptEl.classList.add( 'is-bump' );
@@ -3025,11 +3028,11 @@ export class UI {
 	// Brief notification. Returns a function that dismisses it early.
 	toast( text, ms = 2500 ) {
 
-		text = t( String( text ?? '' ) );
+		text = touchText( t( String( text ?? '' ) ) );
 		if ( ! text ) return () => {};
 
 		// repeated message: restart its timer instead of stacking duplicates
-		const same = this._toasts.find( ( t ) => t.text === text && ! t.leaving );
+		const same = this._toasts.find( ( o ) => o.text === text && ! o.leaving );
 		if ( same ) {
 
 			clearTimeout( same.timer );
@@ -3053,25 +3056,25 @@ export class UI {
 		void el.offsetWidth;
 		el.classList.add( 'is-in' );
 
-		const t = { text, el, bar, timer: 0, leaving: false };
-		t.dismiss = () => {
+		const toast = { text, el, bar, timer: 0, leaving: false };
+		toast.dismiss = () => {
 
-			if ( t.leaving ) return;
-			t.leaving = true;
-			clearTimeout( t.timer );
+			if ( toast.leaving ) return;
+			toast.leaving = true;
+			clearTimeout( toast.timer );
 			el.style.setProperty( '--h', `${ el.offsetHeight }px` );
 			el.classList.remove( 'is-in' );
 			el.classList.add( 'is-out' );
-			const i = this._toasts.indexOf( t );
+			const i = this._toasts.indexOf( toast );
 			if ( i >= 0 ) this._toasts.splice( i, 1 );
 			setTimeout( () => el.remove(), 360 );
 
 		};
 
-		t.timer = setTimeout( t.dismiss, ms );
-		this._toasts.push( t );
+		toast.timer = setTimeout( toast.dismiss, ms );
+		this._toasts.push( toast );
 		while ( this._toasts.length > 4 ) this._toasts[ 0 ].dismiss();
-		return t.dismiss;
+		return toast.dismiss;
 
 	}
 

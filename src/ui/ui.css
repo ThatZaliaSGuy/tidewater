@@ -2649,7 +2649,7 @@ html.is-touch, html.is-touch body {
 .tw-touch {
 	position: fixed;
 	inset: 0;
-	z-index: 45;
+	z-index: 60;
 	pointer-events: none;
 	touch-action: none;
 	font: 600 12px/1 Inter, system-ui, sans-serif;
@@ -2660,7 +2660,8 @@ html.is-touch, html.is-touch body {
 	--tt-b: max(14px, env(safe-area-inset-bottom));
 }
 
-.tw-root.is-starting ~ .tw-touch, body:has(.tw-root.is-starting) .tw-touch {
+/* gone while the start screen, the settings panel or a dialog (shop, cooler, guide, ATM) is up */
+body:has(.tw-root.is-starting) .tw-touch, body:has(.tw-root[data-panel='open']) .tw-touch, .tw-touch[data-set='menu'] {
 	display: none;
 }
 
@@ -2713,9 +2714,9 @@ html.is-touch, html.is-touch body {
 /* the drawer: the rest of the keys, in rows above the arc */
 .tw-touch-more {
 	position: absolute;
-	right: calc(var(--tt-r) + var(--tt) * 2.18 + var(--tt-gap) * 2);
-	bottom: var(--tt-b);
-	max-width: min(56vw, 420px);
+	right: calc(var(--tt-r) + 100px + var(--tt-gap));
+	bottom: calc(var(--tt-b) + var(--tt) * 2.18 + var(--tt-gap) * 2);
+	max-width: min(52vw, 400px);
 	display: flex;
 	flex-wrap: wrap-reverse;
 	justify-content: flex-end;
@@ -2745,3 +2746,69 @@ html.is-touch, html.is-touch body {
 	border-radius: 50%;
 	background: rgba(255, 255, 255, 0.4);
 }
+
+/* ── the HUD on a touch screen ─────────────────────────────────────────── */
+/* A phone in landscape is about 390 px high: the whole HUD is drawn smaller, and what sat in the
+   bottom corners (under the thumbs now) moves: the map to the top right, the boat's gauges to the
+   bottom centre with the prompt above them. The settings rail goes (More > Settings opens the
+   panel), and so does every legend of keys. */
+
+html.is-touch {
+	--tw-u: clamp(0.66px, calc(0.2vmin), 1px);
+}
+
+html.is-touch .tw-rail,
+html.is-touch .tw-start-keys,
+html.is-touch .rh-keys,
+html.is-touch .jh-keys,
+html.is-touch .fy-keys,
+html.is-touch .tw-panel-foot,
+html.is-touch .rh-chip kbd,
+html.is-touch .atm-opt kbd,
+html.is-touch #fps {
+	display: none !important;
+}
+
+html.is-touch .gm-map {
+	top: max(var(--tw-edge), env(safe-area-inset-top));
+	bottom: auto;
+	right: max(var(--tw-edge), env(safe-area-inset-right));
+	width: calc(132 * var(--tw-u));
+	height: calc(132 * var(--tw-u));
+}
+
+html.is-touch .gm-coach {
+	top: calc(var(--tw-edge) + 144 * var(--tw-u));
+	bottom: auto;
+	right: max(var(--tw-edge), env(safe-area-inset-right));
+}
+
+html.is-touch .tw-boat {
+	left: 50%;
+	translate: -50% 0;
+	scale: 0.86;
+	transform-origin: 50% 100%;
+}
+
+/* the driving dock (car picker) leaves the stick's corner for the top left, under the title */
+html.is-touch .rh-dock {
+	bottom: auto;
+	top: calc(var(--tw-edge) + 44 * var(--tw-u));
+	scale: 0.86;
+	transform-origin: 0 0;
+}
+
+/* the prompt and the fishing bars ride above whatever gauges are at the bottom centre */
+html.is-touch .tw-prompt { bottom: calc(var(--tw-edge) + 150 * var(--tw-u)); }
+html.is-touch .gm-fight { bottom: calc(var(--tw-edge) + 208 * var(--tw-u)); }
+html.is-touch .gm-cast.is-third { bottom: calc(var(--tw-edge) + 202 * var(--tw-u)); }
+
+/* the settings panel: full height, and wide enough to use with a thumb */
+html.is-touch .tw-panel { max-height: calc(100vh - 2 * var(--tw-3)); }
+
+/* the catch card on a short screen: a smaller fish and title, so the stats and the footer fit */
+html.is-touch .gm-catch { gap: 2px; }
+html.is-touch .gm-catch h2 { font-size: clamp(24px, 9vh, 60px); }
+html.is-touch .gm-catch-stage { width: min(94vw, calc(34vh * 2.4)); }
+html.is-touch .gm-catch-note { margin-top: var(--tw-1); }
+html.is-touch .gm-catch-foot { margin-top: var(--tw-1); }

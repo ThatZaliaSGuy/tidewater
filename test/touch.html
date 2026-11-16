@@ -11,6 +11,8 @@
 		html, body { margin: 0; height: 100%; overflow: hidden; background: #1c2a36; }
 		#view { position: fixed; inset: 0; touch-action: none; background: linear-gradient( #6d8ea6, #2c4a5e ); }
 		#out { position: fixed; top: 8px; left: 8px; margin: 0; font: 12px/1.4 ui-monospace, monospace; color: #fff; pointer-events: none; white-space: pre; }
+		/* the minimap's place (game/Minimap.js) */
+		.gm-map { position: absolute; right: var(--tw-edge); bottom: var(--tw-edge); width: calc(184 * var(--tw-u)); height: calc(184 * var(--tw-u)); border-radius: 50%; background: #0b2c48; border: 2px solid #fff6; }
 		select { position: fixed; top: 8px; right: 8px; z-index: 60; }
 	</style>
 </head>
@@ -24,6 +26,21 @@
 		const view = document.getElementById( 'view' ), set = document.getElementById( 'set' );
 		const input = window.__input = new Input( view );
 		window.__touch = new TouchControls( { input, dom: view, state: () => set.value } );
+		// ?hud: the game's HUD with sample data under the controls, to see what overlaps what
+		if ( new URLSearchParams( location.search ).has( 'hud' ) ) {
+
+			const { UI } = await import( '/src/ui/UI.js' );
+			const ui = window.__ui = new UI();
+			UI.demo( ui );
+			ui.togglePanel( false );
+			const map = document.createElement( 'div' );
+			map.className = 'gm-map';
+			ui.hud.append( map );
+			document.getElementById( 'out' ).style.display = 'none';
+			document.getElementById( 'set' ).style.top = '50%';
+
+		}
+
 		const total = window.__total = { x: 0, y: 0, wheel: 0, hits: [] };
 		( function frame() {
 

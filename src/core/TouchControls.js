@@ -18,23 +18,24 @@ const KEY_NAMES = { Space: ' ', Escape: 'Escape', Enter: 'Enter', Tab: 'Tab', F1
 
 // What the buttons are, by what the player is doing. `main` are the large ones under the thumb
 // (first is nearest the corner), `more` the drawer. key: a KeyboardEvent code, or 'lmb' / 'rmb'.
-const B = ( key, label, hint = '' ) => ( { key, label, hint } );
-const COMMON = [ B( 'KeyL', 'Torch' ), B( 'KeyT', 'Time' ), B( 'KeyM', 'Sound' ), B( 'KeyH', 'HUD' ), B( 'KeyP', 'Panel' ), B( 'F1', 'Help' ), B( 'Escape', 'Close' ) ];
+const B = ( key, label ) => ( { key, label } );
+const COMMON = [ B( 'KeyL', 'Torch' ), B( 'KeyT', 'Time' ), B( 'KeyM', 'Sound' ), B( 'KeyH', 'Settings' ), B( 'KeyP', 'Photo' ), B( 'stats', 'FPS' ), B( 'Escape', 'Close' ) ];
 const SETS = {
-	foot: { main: [ B( 'Space', 'Jump' ), B( 'KeyE', 'Use', 'E' ), B( 'KeyR', 'Rod', 'R' ) ],
+	foot: { main: [ B( 'Space', 'Jump' ), B( 'KeyE', 'Use' ), B( 'KeyR', 'Rod' ) ],
 		more: [ B( 'KeyI', 'Bag' ), B( 'KeyV', 'View' ), B( 'KeyB', 'Whistle' ), B( 'Backquote', 'Car' ), ...COMMON ] },
-	swim: { main: [ B( 'Space', 'Up' ), B( 'KeyC', 'Dive' ), B( 'KeyE', 'Use', 'E' ) ],
+	swim: { main: [ B( 'Space', 'Up' ), B( 'KeyC', 'Dive' ), B( 'KeyE', 'Use' ) ],
 		more: [ B( 'KeyI', 'Bag' ), B( 'KeyV', 'View' ), ...COMMON ] },
-	fish: { main: [ B( 'lmb', 'Cast' ), B( 'rmb', 'Reel in' ), B( 'KeyE', 'Use', 'E' ), B( 'KeyR', 'Rod', 'R' ) ],
+	fish: { main: [ B( 'lmb', 'Cast' ), B( 'rmb', 'Reel in' ), B( 'KeyE', 'Use' ), B( 'KeyR', 'Rod' ) ],
 		more: [ B( 'Space', 'Jump' ), B( 'KeyI', 'Bag' ), B( 'KeyV', 'View' ), ...COMMON ] },
-	boat: { main: [ B( 'KeyE', 'Leave', 'E' ), B( 'KeyR', 'Rod', 'R' ), B( 'KeyV', 'View' ) ],
+	boat: { main: [ B( 'KeyE', 'Leave' ), B( 'KeyR', 'Rod' ), B( 'KeyV', 'View' ) ],
 		more: [ B( 'KeyI', 'Bag' ), ...COMMON ] },
-	car: { main: [ B( 'Space', 'Brake' ), B( 'KeyE', 'Leave', 'E' ), B( 'KeyR', 'Recover', 'R' ) ],
-		more: [ B( 'KeyT', 'Repair' ), B( 'KeyY', 'Bail out' ), B( 'KeyK', 'Keys' ), B( 'KeyM', 'Sound' ), B( 'F1', 'Help' ), B( 'Escape', 'Close' ) ] },
-	ski: { main: [ B( 'Space', 'Hop' ), B( 'KeyX', 'Boost' ), B( 'KeyE', 'Leave', 'E' ) ],
+	car: { main: [ B( 'Space', 'Brake' ), B( 'KeyE', 'Leave' ), B( 'KeyR', 'Recover' ) ],
+		more: [ B( 'KeyT', 'Repair' ), B( 'KeyY', 'Bail out' ), B( 'KeyK', 'Keys' ), B( 'KeyM', 'Sound' ), B( 'stats', 'FPS' ), B( 'Escape', 'Close' ) ] },
+	ski: { main: [ B( 'Space', 'Hop' ), B( 'KeyX', 'Boost' ), B( 'KeyE', 'Leave' ) ],
 		more: [ B( 'ShiftLeft', 'Tuck' ), B( 'KeyC', 'Camera' ), B( 'KeyG', 'Mate' ), ...COMMON ] },
-	helm: { main: [ B( 'KeyE', 'Leave', 'E' ), B( 'KeyL', 'Lines' ), B( 'KeyH', 'Horn' ) ],
-		more: [ B( 'KeyR', 'Ramp' ), B( 'KeyX', 'Engine stop' ), B( 'KeyC', 'Wheel centre' ), B( 'KeyV', 'View' ), B( 'F1', 'Help' ), B( 'Escape', 'Close' ) ] },
+	helm: { main: [ B( 'KeyE', 'Leave' ), B( 'KeyL', 'Lines' ), B( 'KeyH', 'Horn' ) ],
+		more: [ B( 'KeyR', 'Ramp' ), B( 'KeyX', 'Engine stop' ), B( 'KeyC', 'Wheel centre' ), B( 'KeyV', 'View' ), B( 'stats', 'FPS' ), B( 'Escape', 'Close' ) ] },
+	menu: { main: [], more: [] }, // a dialog is up: it has its own buttons, the controls step aside
 	fly: { main: [ B( 'Space', 'Up' ), B( 'KeyC', 'Down' ), B( 'KeyF', 'Walk' ) ], more: [ B( 'ShiftLeft', 'Fast' ), ...COMMON ] },
 };
 
@@ -125,6 +126,8 @@ export class TouchControls {
 
 		if ( code === 'lmb' ) { this.input.mouseDown = down; return; }
 		if ( code === 'rmb' ) { this.input.rightDown = down; return; }
+		// the frame-rate readout (Settings > Performance has the same switch)
+		if ( code === 'stats' ) { const el = down && document.querySelector( '.tw-stats' ); if ( el ) el.hidden = ! el.hidden; return; }
 		const key = KEY_NAMES[ code ] ?? ( code.startsWith( 'Key' ) ? code.slice( 3 ).toLowerCase() : code.startsWith( 'Shift' ) ? 'Shift' : code );
 		( document.body || window ).dispatchEvent( new KeyboardEvent( down ? 'keydown' : 'keyup', { code, key, bubbles: true, cancelable: true } ) );
 
@@ -288,7 +291,8 @@ export class TouchControls {
 		if ( name === this.set ) return;
 		for ( const b of this.el.querySelectorAll( '.tw-touch-main .is-down, .tw-touch-more .is-down' ) ) this.release( b );
 		this.set = name;
-		const html = ( list ) => list.map( ( b ) => `<button type="button" data-key="${ b.key }"><b>${ t( b.label ) }</b>${ b.hint ? `<kbd>${ b.hint }</kbd>` : '' }</button>` ).join( '' );
+		if ( name === 'menu' ) { this.releaseAll(); this.steer( 0, 0, 0 ); }
+		const html = ( list ) => list.map( ( b ) => `<button type="button" data-key="${ b.key }"><b>${ t( b.label ) }</b></button>` ).join( '' );
 		this.mainEl.innerHTML = html( SETS[ name ].main );
 		this.moreEl.innerHTML = html( SETS[ name ].more );
 		this.el.dataset.set = name;
