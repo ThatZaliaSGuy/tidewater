@@ -722,6 +722,7 @@ fn fragment( in: FSIn ) -> vec4f {
 
 			list.push( [ 'haze march', this.haze._passes.march ], [ 'haze sun mask', this.haze._passes.mask ] );
 			this.haze._passes.blur.forEach( ( p, i ) => list.push( [ 'haze god rays ' + i, p ] ) );
+			if ( this.haze.fog && this.haze.fog._passes ) list.push( [ 'fog march', this.haze.fog._passes.march ], [ 'fog temporal', this.haze.fog._passes.temporal[ 0 ] ] );
 
 		}
 

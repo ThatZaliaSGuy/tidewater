@@ -58,6 +58,7 @@ import { Underwater, LENS_REACH } from './post/Underwater.js';
 import { PostFX } from './post/PostFX.js';
 import { SurfaceReflections } from './post/SurfaceReflections.js';
 import { AirHaze } from './post/AirHaze.js';
+import { GroundFog } from './sky/GroundFog.js';
 import { FlyCamera } from './player/FlyCamera.js';
 import { Player } from './player/Player.js';
 import { Cockatoo } from './player/Cockatoo.js';
@@ -374,9 +375,13 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// is seen from where the triangle facing can't be trusted
 		this.waterMaterial.cameraWaterHeightNode = this.query.cameraState().x;
 		// aerial perspective, marine haze and volumetric sun shafts (post)
+		// ground fog: a simulated field (mist in the hollows and on the lagoon at dawn, banks on the
+		// slopes) the haze passes march and composite. ?fog=0..1 sets how much the air makes.
+		this.fog = qs.has( 'noHaze' ) || qs.has( 'noFog' ) ? null : new GroundFog( { terrain: this.terrainData, clouds: this.clouds } );
+		if ( this.fog && qs.has( 'fog' ) ) this.fog.amount = Math.min( 1, Math.max( 0, Number( qs.get( 'fog' ) ) || 0 ) );
 		this.haze = qs.has( 'noHaze' ) ? null : new AirHaze( {
 			depthTexture: this.sceneRenderer.sceneRT.depthTexture, underwater: this.underwater, atmosphere: this.atmosphere,
-			sky: this.sky, clouds: this.clouds, terrain: this.terrainGPU, csm: this.csm,
+			sky: this.sky, clouds: this.clouds, terrain: this.terrainGPU, csm: this.csm, fog: this.fog,
 		} );
 		this.post = new PostFX( renderer, { sceneRenderer: this.sceneRenderer, camera, underwater: this.underwater, clouds: this.clouds, sunDir: this.atmosphere.sunDir, haze: this.haze } );
 		G.exposure.value = this.settings.exposure;
@@ -776,6 +781,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.breakers.update( this.camera );
 		this.spray.update();
 		if ( this.clouds ) this.clouds.update( dt, this.camera );
+		if ( this.fog ) this.fog.update( dt, this.settings.timeOfDay );
 		this.environment.update( dt );
 
 		// ---- world

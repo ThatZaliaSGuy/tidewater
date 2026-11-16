@@ -52,6 +52,9 @@ of the same frame rate on integrated GPUs.
 - Physically based atmosphere (Hillaire 2020) with a sun, moon and stars.
 - Volumetric cumulus and wispy cirrus with cloud shadows on the land.
 - Aerial perspective and sea haze.
+- Ground fog: mist that pools in the hollows and on the lagoon around dawn and in the night, banks on the
+  upper slopes in very humid air. A simulated field that drifts with the wind, drains downhill and burns
+  off in the sun, drawn as a ray-marched volume lit through the shadow maps.
 - God rays, and a lens flare with occlusion.
 
 **World**
@@ -123,7 +126,9 @@ Add these to the URL, for example `?fly&noAudio`:
 | `fly` | Start in the free camera |
 | `noAudio` | Disable sound |
 | `noClouds` | Skip the volumetric clouds |
-| `noHaze` | Skip the haze and sun shafts |
+| `noHaze` | Skip the haze, sun shafts and ground fog |
+| `noFog` | Skip the ground fog |
+| `fog=0..1` | How readily the air makes ground fog (default 0.6) |
 | `noCaustics` | Skip caustics |
 | `noVeg` | Skip vegetation |
 | `noSim` | Skip the swash (shallow-water) simulation |

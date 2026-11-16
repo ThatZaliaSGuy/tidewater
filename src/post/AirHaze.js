@@ -22,6 +22,8 @@ const CLR = [ 0, 0, 0, 0 ];
 //    upsampled in the composite. Near geometry gets the lit in-scatter (bright shafts between shadowed
 //    air); toward the sky / far geometry it hands over to the shadowed deficit only, so silhouettes
 //    against the sky stay consistent and the sky is only ever darkened (crepuscular rays in the sky).
+//  - ground fog (optional, src/sky/GroundFog.js): its march and accumulation run with these passes,
+//    and the composite lays the result over the hazed scene.
 // The camera under water, and pixels whose lens is in water, get nothing (Underwater handles those).
 //
 // WGSL (prefix `haze`): this.compositeModule: fn hazeApply( uv: vec2f, c: vec4f ) -> vec4f (the composite,
@@ -71,7 +73,7 @@ fn sunShadowHard( P: vec3f ) -> f32 {
 
 export class AirHaze {
 
-	constructor( { depthTexture, underwater, atmosphere, sky = null, clouds = null, terrain = null, csm = null } ) {
+	constructor( { depthTexture, underwater, atmosphere, sky = null, clouds = null, terrain = null, csm = null, fog = null } ) {
 
 		this.depthTexture = depthTexture;
 		this.uw = underwater;
@@ -80,6 +82,8 @@ export class AirHaze {
 		this.clouds = clouds;
 		this.terrain = terrain;
 		this.csm = csm;
+		this.fog = fog;
+		if ( fog ) fog.haze = this;
 
 		this.uniforms = new UniformBlock( 'HazeParams', {
 			// haze (1 = ~20 km visibility at sea level). Default: a humid tropical day, ~12 km: the far side
@@ -138,6 +142,7 @@ export class AirHaze {
 		for ( const r of this.hist ) r.setSize( Math.round( w * 0.5 * s ), Math.round( h * 0.5 * s ) );
 		this._histValid = false;
 		for ( const r of this.ssTargets ) r.setSize( Math.round( w * 0.25 * s ), Math.round( h * 0.25 * s ) );
+		if ( this.fog ) this.fog.setSize( Math.round( w * 0.5 * s ), Math.round( h * 0.5 * s ) );
 
 	}
 
@@ -173,6 +178,7 @@ export class AirHaze {
 
 		if ( ! this._passes ) this._build();
 		const p = this._passes;
+		if ( this.fog ) this.fog.render();
 		p.march.render( { colorViews: [ this.low.texture ], clear: CLR } );
 		// accumulate: 16 jittered steps per pixel are noisy, and the final temporal resolve clamps the
 		// noisy history away, so the shafts flickered; here they settle over ~10 frames
@@ -211,6 +217,7 @@ export class AirHaze {
 			HZ_CLOUDS: this.clouds && this.clouds.module ? 1 : 0,
 			HZ_TERRAIN: this.terrain && this.terrain.module ? 1 : 0,
 			HZ_MOON: this.sky && this.sky.module ? 1 : 0,
+			HZ_FOG: this.fog ? 1 : 0,
 		};
 
 	}
@@ -333,8 +340,9 @@ fn hazeVisibility( P: vec3f ) -> f32 {
 		this._compositeModule = new ShaderModule( {
 			name: 'haze-composite',
 			deps: [ this.module, this.atmosphere && this.atmosphere.module, this.sky && this.sky.module,
-				this.clouds && this.clouds.module ],
+				this.clouds && this.clouds.module, this.fog && this.fog.paramsModule ],
 			bindings: {
+				...( this.fog ? { hazeFog: { texture: () => this.fog.texture } } : {} ),
 				hazeLow: { texture: () => this.hist[ this._hc ].texture },
 				hazeSS: { texture: () => this.ssShafts.texture },
 				hazeMedium: { texture: () => this.mediumTexture || this.low.texture },
@@ -417,6 +425,30 @@ fn hazeApply( uv: vec2f, c: vec4f ) -> vec4f {
 				let k = 1.0 - exp( - HZ_MARINE_SIGMA * 300.0 * hazeParams.density );
 				out += Ep * rays * k * hazeParams.shafts * hazeParams.ssFade * ${ f( SS_GAIN ) };
 			}
+
+#if HZ_FOG
+			// ---- ground fog over all of it: depth-aware upsample of the half resolution march (a
+			// near frond in front of far fog keeps its own, thinner veil)
+			if ( fogParams.any > 0.5 ) {
+				let ls = vec2i( textureDimensions( hazeFog ) );
+				let pa = uv * vec2f( ls ) - 0.5;
+				let i0 = floor( pa );
+				let fr = pa - i0;
+				var acc = vec4f( 0.0 );
+				var wSum = 1e-6;
+				for ( var k = 0; k < 4; k++ ) {
+					let o = vec2i( k & 1, k >> 1u );
+					let q = clamp( vec2i( i0 ) + o, vec2i( 0 ), ls - 1 );
+					let wb = select( 1.0 - fr.x, fr.x, o.x == 1 ) * select( 1.0 - fr.y, fr.y, o.y == 1 );
+					let rel = abs( textureLoad( hazeLow, q, 0 ).z - dist ) / max( dist, 0.5 );
+					let wt = wb / pow2( rel * 10.0 + 1.0 ) + 1e-5;
+					acc += textureLoad( hazeFog, q, 0 ) * wt;
+					wSum += wt;
+				}
+				let fg = acc / wSum;
+				out = out * ( 1.0 - sat( fg.a ) ) + fg.rgb;
+			}
+#endif
 		}
 	}
 	return vec4f( out, c.a );
@@ -611,6 +643,7 @@ fn fragment( in: FSIn ) -> vec4f {
 		} ) );
 
 		this._passes = { march, mask, blur, temporal };
+		if ( this.fog && ! this.fog._passes ) this.fog._build();
 
 	}
 

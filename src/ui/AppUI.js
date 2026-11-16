@@ -184,6 +184,12 @@ export class AppUI {
 			atmo.addSlider( { label: 'Sun shafts', object: s, key: 'shafts', min: 0, max: 3, step: 0.05, tooltip: 'Volumetric light shafts and crepuscular rays in the haze (shadows of palms, the pier, hills and clouds). 0 turns them off.', onChange: ( v ) => { app.haze.shafts.value = v; } } );
 
 		}
+		if ( app.fog ) {
+
+			s.fog = app.fog.amount;
+			atmo.addSlider( { label: 'Fog', object: s, key: 'fog', min: 0, max: 1, step: 0.01, format: ( v ) => `${ Math.round( v * 100 ) }%`, tooltip: 'How readily the air makes ground fog: mist that pools in the hollows and on the lagoon around dawn and in the night, and at the top, banks on the slopes and a standing mist. It drifts with the wind and burns off in the sun. 0 turns it off.', onChange: ( v ) => { app.fog.amount = v; if ( v <= 0 ) app.fog.clear(); } } );
+
+		}
 		if ( app.airMotes ) {
 
 			s.air = app.airMotes.intensity.value;

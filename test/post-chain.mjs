@@ -1,7 +1,8 @@
 // Post chain test (headless): a small scene through SceneRenderer + the whole PostFX chain (GTAO,
 // AirHaze, Underwater, TAAU, motion blur, bloom, lens flare, droplets, grading, ACES) at the real
 // output resolution, with stubbed modules of the other streams.
-//   node test/post-chain.mjs [mode] [out.png]     mode: air | under | motion | noao | nobounce | flare | lens | waterline
+//   node test/post-chain.mjs [mode] [out.png]     mode: air | under | motion | noao | nobounce | flare | lens | waterline | fog | fogdawn
+//   (fog: a bank of ground fog poured behind the pillars; fogdawn: the same against a low sun)
 import { writePNG } from './headless.mjs';
 import './smaa-shim.mjs';
 import { GPU } from '../src/engine/gpu/GPU.js';
@@ -107,7 +108,7 @@ const lamp = new E.Mesh( new E.SphereGeometry( 0.2, 16, 8 ), std( { name: 'lamp'
 lamp.position.set( - 2, 2.5, 1 ); scene.add( lamp );
 
 const camera = new E.PerspectiveCamera( 62, W / H, 0.06, 60000 );
-const sunLow = mode === 'flare';
+const sunLow = mode === 'flare' || mode === 'fogdawn';
 if ( ! realApp ) G.sunDir.value.set( 0.5, sunLow ? 0.12 : 0.55, sunLow ? - 0.86 : 0.3 ).normalize();
 if ( ! realApp ) {
 
@@ -145,7 +146,18 @@ struct BgOut { @location( 0 ) color: vec4f, @location( 1 ) velocity: vec4f, @loc
 sceneRenderer.background = realApp ? sky.background : { draw: ( rp ) => bg.draw( rp ) };
 
 const underwater = new Underwater( { depthTexture: sceneRenderer.sceneRT.depthTexture, maskTexture: sceneRenderer.waterMaskTexture, query, caustics } );
-const haze = new AirHaze( { depthTexture: sceneRenderer.sceneRT.depthTexture, underwater, atmosphere, sky, clouds } );
+// ground fog over flat land: a bank poured behind the pillars, a thinner patch to the side
+let fog = null;
+if ( mode.startsWith( 'fog' ) ) {
+
+	const { GroundFog } = await import( '../src/sky/GroundFog.js' );
+	fog = new GroundFog( { terrain: { size: 2048, heightAt: () => 0.3 } } );
+	fog.addFog( - 10, - 60, 70, 1.1, 0.6 );
+	fog.addFog( 45, - 5, 45, 0.45, 0.35 );
+
+}
+
+const haze = new AirHaze( { depthTexture: sceneRenderer.sceneRT.depthTexture, underwater, atmosphere, sky, clouds, fog } );
 const engine = { width: W, height: H };
 const sunDirU = realApp ? atmosphere.sunDir : { value: G.sunDir.value.clone() };
 const post = new PostFX( engine, { sceneRenderer, camera, underwater, clouds, sunDir: sunDirU, haze } );
@@ -204,6 +216,7 @@ for ( let f = 0; f < FRAMES; f ++ ) {
 
 	}
 
+	if ( fog ) fog.update( dt, 12 );
 	post.beginFrame();
 	if ( first ) {
 
@@ -254,6 +267,7 @@ if ( process.env.BENCH ) {
 	await time( 'AO blur x+y', () => { P._aoBlurXPass.render( { colorViews: [ P.aoBlurX.texture ] } ); P._aoBlurYPass.render( { colorViews: [ P.aoBlurY.texture ] } ); } );
 	await time( 'medium', () => P._mediumPass.render( { colorViews: [ P.medium.texture ] } ) );
 	await time( 'haze march', () => haze._passes.march.render( { colorViews: [ haze.low.texture ] } ) );
+	if ( fog ) await time( 'fog march', () => fog._passes.march.render( { colorViews: fog.low.textures } ) );
 	await time( 'haze god rays (4)', () => { haze._passes.mask.render( { colorViews: [ haze.ssTargets[ 0 ].texture ] } ); for ( let i = 0; i < 3; i ++ ) haze._passes.blur[ i ].render( { colorViews: [ haze.ssTargets[ i + 1 ].texture ] } ); } );
 	await time( 'beauty', () => P._beautyPass.render( { colorViews: [ P.beauty.texture ] } ) );
 	await time( 'TAAU resolve', () => P.taau._resolve[ 0 ].render( { colorViews: P.taau.history[ 1 ].textures } ) );
