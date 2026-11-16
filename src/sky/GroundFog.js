@@ -298,14 +298,20 @@ struct FogOut { @location( 0 ) color: vec4f, @location( 1 ) dist: vec4f };
 			t += ( p0.y - ceilY ) / - rd.y;
 			continue;
 		}
+		// a step longer than the way through the layer would mostly land outside it (a thin sheet seen
+		// from far above turned to a dither pattern): one step spans the layer instead
+		if ( rd.y < -0.05 && p0.y <= ceilY + ds ) { ds = min( ds, max( ( p0.y - floorY ) / - rd.y, dsMin ) ); }
+		if ( rd.y > 0.05 && p0.y < ceilY ) { ds = min( ds, max( ( ceilY - p0.y ) / rd.y, dsMin ) ); }
 		let p = ro + rd * ( t + ds * jit );                    // jittered sample inside this segment
 		t += ds;
 		if ( p.y < floorY || D <= 0.004 || H <= 0.0 ) { continue; }
 
 		let h = p.y - floorY;
 		let hf = clamp( h / max( H, 0.05 ), 0.0, 1.0 );
-		let nb = fogNoise( p * FG_NB - fogParams.drift0.xyz );
-		let nd = fogNoise( p * FG_ND - fogParams.drift1.xyz + ( nb.gbr - 0.5 ) * 0.22 );
+		// far away the rolls and wisps are smaller than a pixel and a step: they fade to their mean
+		// (the tiling noise read as a regular pattern over the sea from the summit)
+		let nb = mix( vec4f( 0.5 ), fogNoise( p * FG_NB - fogParams.drift0.xyz ), 1.0 - smoothstep( 10.0, 36.0, t ) );
+		let nd = mix( vec4f( 0.5 ), fogNoise( p * FG_ND - fogParams.drift1.xyz + ( nb.gbr - 0.5 ) * 0.22 ), 1.0 - smoothstep( 5.0, 18.0, t ) );
 
 		// billowing, soft top: broad rolls + small curls, livelier where fog has just arrived
 		let amp = clamp( H, 0.08, 1.0 ) * ( 0.55 + 0.45 * billow );

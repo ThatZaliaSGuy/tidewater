@@ -88,6 +88,8 @@ export class FogField {
 		this.valley = A(); // where cold air pools
 		this.bank = A(); // upper slopes that catch cloud
 		this.flat = A();
+		this.shore = A(); // land and shallows (1) against the open sea (0)
+		this.edge = A(); // 1 inside, fading to 0 at the border of the domain (no straight cut where the field ends)
 		this.top = A();
 		// rgba per cell: density, layer top (m), ground (m), billow
 		this.data = new Float32Array( CELLS * 4 );
@@ -121,6 +123,8 @@ export class FogField {
 			const sx = ( terrain.heightAt( x + step, z ) - terrain.heightAt( x - step, z ) ) / ( 2 * step );
 			const sz = ( terrain.heightAt( x, z + step ) - terrain.heightAt( x, z - step ) ) / ( 2 * step );
 			this.flat[ k ] = 1 - smooth( 0.1, 0.4, Math.hypot( sx, sz ) );
+			this.shore[ k ] = Math.max( smooth( - 5, - 0.5, hm ), this.water[ k ] );
+			this.edge[ k ] = smooth( 0, 12, Math.min( i, j, N - 1 - i, N - 1 - j ) );
 
 		}
 
@@ -149,7 +153,7 @@ export class FogField {
 			p = Math.max( p, this.water[ k ] );
 			p *= smooth( 1.7, 1, g );
 			// the open sea beyond the shallows holds little of it
-			p *= 0.15 + 0.85 * Math.max( smooth( - 5, - 0.5, bed[ k ] * FOG_UNIT ), this.water[ k ] );
+			p *= 0.15 + 0.85 * this.shore[ k ];
 			this.valley[ k ] = clamp( p, 0, 1 );
 			// a band on the upper slopes, below the summit
 			this.bank[ k ] = smooth( 0.31 * peak, 0.47 * peak, g ) * smooth( 0.95 * peak, 0.75 * peak, g ) * ( peak > 1 ? 1 : 0 );
@@ -236,13 +240,15 @@ export class FogField {
 
 			if ( src.mist > 0 ) {
 
-				const a = src.mist * ( 0.3 + 0.7 * valley[ k ] ) * Math.max( 0, src.mistTarget - d[ k ] ) * ( g < 3.2 ? 1 : 0.3 );
+				// (it hangs over the land and the shallows; the open sea keeps a trace)
+				const a = src.mist * ( 0.3 + 0.7 * valley[ k ] ) * ( 0.2 + 0.8 * this.shore[ k ] ) * Math.max( 0, src.mistTarget - d[ k ] ) * ( g < 3.2 ? 1 : 0.3 );
 				add += a; thick += a * ( 0.28 + 0.22 * valley[ k ] );
 
 			}
 
 			if ( add <= 0 ) continue;
-			const w = add * dt, total = d[ k ] + w;
+			const w = add * this.edge[ k ] * dt, total = d[ k ] + w;
+			if ( w <= 0 ) continue;
 			h[ k ] = ( h[ k ] * d[ k ] + thick / add * w ) / total;
 			d[ k ] = total;
 			any = true;
@@ -433,7 +439,7 @@ export class FogField {
 				}
 
 				const o = k * 4, sp = vx[ k ] * vx[ k ] + vz[ k ] * vz[ k ];
-				data[ o ] = d[ k ];
+				data[ o ] = d[ k ] * this.edge[ k ];
 				data[ o + 1 ] = top[ k ] * FOG_UNIT + this.seaLevel;
 				data[ o + 2 ] = gr * FOG_UNIT + this.seaLevel;
 				data[ o + 3 ] = Math.min( 1, fresh[ k ] + ( sp > 0 ? Math.sqrt( sp ) * 0.5 : 0 ) );
