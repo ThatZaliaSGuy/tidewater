@@ -2634,3 +2634,114 @@ body {
 	}
 
 }
+
+/* ── touch controls (core/TouchControls.js) ────────────────────────────── */
+/* A stick that appears under the left thumb, buttons under the right. The layer itself lets
+   touches through to the view; only its buttons take them. */
+
+html.is-touch, html.is-touch body {
+	overscroll-behavior: none;
+	-webkit-user-select: none;
+	user-select: none;
+	-webkit-touch-callout: none;
+}
+
+.tw-touch {
+	position: fixed;
+	inset: 0;
+	z-index: 45;
+	pointer-events: none;
+	touch-action: none;
+	font: 600 12px/1 Inter, system-ui, sans-serif;
+	color: #f2f8fc;
+	--tt: clamp(52px, 15vmin, 76px);
+	--tt-gap: 10px;
+	--tt-r: max(14px, env(safe-area-inset-right));
+	--tt-b: max(14px, env(safe-area-inset-bottom));
+}
+
+.tw-root.is-starting ~ .tw-touch, body:has(.tw-root.is-starting) .tw-touch {
+	display: none;
+}
+
+.tw-touch button {
+	pointer-events: auto;
+	touch-action: none;
+	appearance: none;
+	display: grid;
+	place-items: center;
+	align-content: center;
+	gap: 3px;
+	margin: 0;
+	padding: 0 4px;
+	border: 1px solid rgba(255, 255, 255, 0.34);
+	border-radius: 999px;
+	background: rgba(8, 16, 24, 0.42);
+	color: inherit;
+	font: inherit;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+	-webkit-tap-highlight-color: transparent;
+}
+
+.tw-touch button b { font-weight: 600; pointer-events: none; }
+.tw-touch button kbd { font: 500 10px/1 'JetBrains Mono', ui-monospace, monospace; opacity: 0.6; pointer-events: none; }
+.tw-touch button.is-down, .tw-touch button.is-on { background: rgba(255, 255, 255, 0.3); border-color: rgba(255, 255, 255, 0.8); }
+
+/* the large buttons: an arc of up to four around the corner, the first nearest it */
+.tw-touch-main button {
+	position: absolute;
+	width: var(--tt);
+	height: var(--tt);
+	right: var(--tt-r);
+	bottom: var(--tt-b);
+}
+.tw-touch-main button:nth-child(1) { width: calc(var(--tt) * 1.18); height: calc(var(--tt) * 1.18); }
+.tw-touch-main button:nth-child(2) { right: calc(var(--tt-r) + var(--tt) * 1.18 + var(--tt-gap)); }
+.tw-touch-main button:nth-child(3) { bottom: calc(var(--tt-b) + var(--tt) * 1.18 + var(--tt-gap)); }
+.tw-touch-main button:nth-child(4) { right: calc(var(--tt-r) + var(--tt) * 1.18 + var(--tt-gap)); bottom: calc(var(--tt-b) + var(--tt) + var(--tt-gap)); }
+
+/* more and full screen: small, up the right edge above the arc */
+.tw-touch-tools {
+	position: absolute;
+	right: var(--tt-r);
+	bottom: calc(var(--tt-b) + var(--tt) * 2.18 + var(--tt-gap) * 2);
+	display: flex;
+	gap: var(--tt-gap);
+}
+.tw-touch-tools button { width: 40px; height: 40px; font-size: 18px; }
+
+/* the drawer: the rest of the keys, in rows above the arc */
+.tw-touch-more {
+	position: absolute;
+	right: calc(var(--tt-r) + var(--tt) * 2.18 + var(--tt-gap) * 2);
+	bottom: var(--tt-b);
+	max-width: min(56vw, 420px);
+	display: flex;
+	flex-wrap: wrap-reverse;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.tw-touch-more[hidden] { display: none; }
+.tw-touch-more button { min-width: 58px; height: 40px; padding: 0 12px; border-radius: 12px; background: rgba(8, 16, 24, 0.62); }
+
+/* the stick: its base where the thumb came down, the knob following it */
+.tw-touch-stick {
+	position: absolute;
+	left: -64px;
+	top: -64px;
+	width: 128px;
+	height: 128px;
+	border-radius: 50%;
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	background: rgba(8, 16, 24, 0.25);
+}
+.tw-touch-stick[hidden] { display: none; }
+.tw-touch-stick i {
+	position: absolute;
+	left: 36px;
+	top: 36px;
+	width: 56px;
+	height: 56px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.4);
+}

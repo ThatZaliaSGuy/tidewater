@@ -6,6 +6,7 @@ import { FrameUniforms } from './engine/render/Frame.js';
 
 import { Engine } from './core/Engine.js';
 import { Input } from './core/Input.js';
+import { TouchControls } from './core/TouchControls.js';
 import { CDLOD } from './core/CDLOD.js';
 import { G } from './core/Globals.js';
 import { Profiler } from './core/Profiler.js';
@@ -128,6 +129,8 @@ export class App {
 		this.camera = camera;
 
 		this.input = new Input( engine.domElement );
+		// phones and tablets: a stick, look by dragging, buttons for what the player is doing
+		this.touch = new TouchControls( { input: this.input, dom: engine.domElement, state: () => this.touchState() } );
 		this.fly = new FlyCamera( camera, engine.domElement, this.input );
 		// every pose set is a camera cut (free-camera toggle, debug views, scripted poses): see cameraCut
 		const setPose = this.fly.setPose.bind( this.fly );
@@ -712,6 +715,20 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 				head: 0.16 * Math.min( 1, s[ 73 ] * 3 ), churn: Math.min( 1, speed / 8 ) * 0.6, speed } );
 
 		}
+
+	}
+
+	// Which set of touch buttons fits what the player is doing (core/TouchControls.js SETS).
+	touchState() {
+
+		if ( this.freeCam ) return 'fly';
+		if ( this.rally?.active ) return 'car';
+		const mode = this.player?.mode;
+		if ( mode === 'jetski' ) return 'ski';
+		if ( mode === 'ferry-helm' ) return 'helm';
+		if ( this.game?.rod?.equipped ) return 'fish';
+		if ( mode === 'boat' ) return 'boat';
+		return mode === 'swim' ? 'swim' : 'foot';
 
 	}
 

@@ -14,6 +14,7 @@ breach. It runs directly on WebGPU and WGSL with its own small rendering engine,
 ## Requirements
 
 - A browser with WebGPU: a recent Chrome, Edge or Safari.
+- On a phone or tablet: Chrome on Android 12 or later. Touch controls appear by themselves (a stick under the left thumb, drag to look, pinch for the camera distance, buttons on the right); see `src/core/TouchControls.js`.
 - A capable GPU. It targets 60 fps at 2560×1267 on an Apple M5 Pro, and dynamic resolution scales
   the render down on slower machines.
 - The first load compiles several hundred shaders, which can take a minute or more. Later visits are
@@ -132,6 +133,8 @@ Add these to the URL, for example `?fly&noAudio`:
 | `noHaze` | Skip the haze, sun shafts and ground fog |
 | `noFog` | Skip the ground fog |
 | `fog=0..1` | How readily the air makes ground fog (default 0.6) |
+| `touch` | Touch controls on (`touch=0`: off). On by default where the main pointer is a finger |
+| `baseLimits` | Ask the GPU only for what every WebGPU device has (no optional features, default limits), to check a phone's path on a desktop |
 | `noCaustics` | Skip caustics |
 | `noVeg` | Skip vegetation |
 | `noSim` | Skip the swash (shallow-water) simulation |

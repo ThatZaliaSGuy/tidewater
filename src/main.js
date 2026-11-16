@@ -37,7 +37,9 @@ app.init( ( p, text, until ) => ui.setLoading( p, text, until ) ).then( async ()
 	} else app.start();
 	ui.showStartOverlay( () => {
 
-		app.input.requestLock();
+		// a phone has no pointer to capture: it goes full screen on its side instead
+		if ( app.touch?.on ) app.touch.fullscreen( true );
+		else app.input.requestLock();
 		if ( app.audio ) app.audio.resume();
 
 	} );

@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- Touch controls on their own (core/TouchControls.js): open /test/touch.html?touch in the dev server.
+     The grey area stands in for the view; the readout shows what the game would see. -->
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+	<title>Touch controls</title>
+	<link rel="stylesheet" href="/src/ui/ui.css" />
+	<style>
+		html, body { margin: 0; height: 100%; overflow: hidden; background: #1c2a36; }
+		#view { position: fixed; inset: 0; touch-action: none; background: linear-gradient( #6d8ea6, #2c4a5e ); }
+		#out { position: fixed; top: 8px; left: 8px; margin: 0; font: 12px/1.4 ui-monospace, monospace; color: #fff; pointer-events: none; white-space: pre; }
+		select { position: fixed; top: 8px; right: 8px; z-index: 60; }
+	</style>
+</head>
+<body>
+	<div id="view"></div>
+	<pre id="out"></pre>
+	<select id="set"><option>foot</option><option>swim</option><option>fish</option><option>boat</option><option>car</option><option>ski</option><option>helm</option><option>fly</option></select>
+	<script type="module">
+		import { Input } from '/src/core/Input.js';
+		import { TouchControls } from '/src/core/TouchControls.js';
+		const view = document.getElementById( 'view' ), set = document.getElementById( 'set' );
+		const input = window.__input = new Input( view );
+		window.__touch = new TouchControls( { input, dom: view, state: () => set.value } );
+		const total = window.__total = { x: 0, y: 0, wheel: 0, hits: [] };
+		( function frame() {
+
+			const l = input.consumeLook();
+			total.x += l.x; total.y += l.y; total.wheel += input.consumeWheel();
+			for ( const k of input.pressed ) total.hits.push( k );
+			total.hits.splice( 0, Math.max( 0, total.hits.length - 8 ) );
+			document.getElementById( 'out' ).textContent = `held  ${ [ ...input.keys ].join( ' ' ) }\nmouse ${ input.mouseDown ? 'L' : '-' }${ input.rightDown ? 'R' : '-' }\nlook  ${ total.x.toFixed( 0 ) } ${ total.y.toFixed( 0 ) }   wheel ${ total.wheel }\nhits  ${ total.hits.join( ' ' ) }`;
+			input.endFrame();
+			requestAnimationFrame( frame );
+
+		} )();
+	</script>
+</body>
+</html>

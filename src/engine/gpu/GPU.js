@@ -48,11 +48,15 @@ export const GPU = {
 			maxStorageBufferBindingSize: 512 * 1024 * 1024,
 			...requiredLimits,
 		};
+		// ?baseLimits (GPU_BASE=1 headless): only what every WebGPU device has, the limits of the
+		// specification and no optional feature. That is what many phones offer, so a desktop can
+		// check that the game still builds its pipelines there.
+		const base = /[?&]baseLimits/.test( globalThis.location?.search || '' ) || !! globalThis.process?.env?.GPU_BASE;
 		const limits = {};
-		for ( const k in want ) if ( L[ k ] !== undefined ) limits[ k ] = Math.min( want[ k ], L[ k ] );
+		if ( ! base ) for ( const k in want ) if ( L[ k ] !== undefined ) limits[ k ] = Math.min( want[ k ], L[ k ] );
 
 		const optional = [ 'float32-filterable', 'timestamp-query', 'rg11b10ufloat-renderable', 'float32-blendable', 'shader-f16', 'clip-distances' ];
-		const requiredFeatures = optional.filter( ( f ) => adapter.features.has( f ) );
+		const requiredFeatures = base ? [] : optional.filter( ( f ) => adapter.features.has( f ) );
 		this.features = new Set( requiredFeatures );
 		this.hasTimestamp = this.features.has( 'timestamp-query' );
 		this.hasFloat32Filterable = this.features.has( 'float32-filterable' );
