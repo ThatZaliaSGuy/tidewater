@@ -52,6 +52,9 @@ of the same frame rate on integrated GPUs.
 - Physically based atmosphere (Hillaire 2020) with a sun, moon and stars.
 - Volumetric cumulus and wispy cirrus with cloud shadows on the land.
 - Aerial perspective and sea haze.
+- Bodies in the water: floating props, the swimmer and a car afloat push the wake simulation through one
+  general list of pressure patches (rings where they drop in, a wake where they move), and crates,
+  barrels and lobster pots float on the waves.
 - Ground fog: mist that pools in the hollows and on the lagoon around dawn and in the night, banks on the
   upper slopes in very humid air. A simulated field that drifts with the wind, drains downhill and burns
   off in the sun, drawn as a ray-marched volume lit through the shadow maps.

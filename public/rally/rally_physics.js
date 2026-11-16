@@ -210,6 +210,22 @@ export class RallyPhysics {
         return ret !== 0;
     }
     /**
+     * The sea surface at an awake prop, from the renderer's wave query at its position: height,
+     * slope along x and z, and vertical rate (m/s). Non-finite input takes the water away again
+     * (the prop is on dry land, or the renderer has no query to spare for it). False when the
+     * prop is not awake.
+     * @param {number} id
+     * @param {number} height
+     * @param {number} slope_x
+     * @param {number} slope_z
+     * @param {number} rate
+     * @returns {boolean}
+     */
+    set_prop_water(id, height, slope_x, slope_z, rate) {
+        const ret = wasm.rallyphysics_set_prop_water(this.__wbg_ptr, id, height, slope_x, slope_z, rate);
+        return ret !== 0;
+    }
+    /**
      * The walker on foot as an upright capsule (feet at y) that pushes props and only props: the
      * car, terrain and scenery never see it. It is a person-sized dynamic body chasing this pose
      * with a clamped force (`drive_pusher`); a jump of more than 1.5 m moves it there outright.
@@ -502,13 +518,13 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 74725, function: Function { arguments: [], shim_idx: 74726, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__h444644dcfe552aba, wasm_bindgen__convert__closures_____invoke__h5de9179e75b47c10);
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 74788, function: Function { arguments: [], shim_idx: 74789, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__h67fc6c1a825e6fbe, wasm_bindgen__convert__closures_____invoke__h8cc74774ac35b9bf);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 84786, function: Function { arguments: [Externref], shim_idx: 84787, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__h7012d1d11362b952, wasm_bindgen__convert__closures_____invoke__hb3568c88ea460d32);
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 84866, function: Function { arguments: [Externref], shim_idx: 84867, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__h8dc18e790607c01b, wasm_bindgen__convert__closures_____invoke__hedaca19d7116f191);
             return ret;
         },
         __wbindgen_init_externref_table: function() {
@@ -527,12 +543,12 @@ function __wbg_get_imports() {
     };
 }
 
-function wasm_bindgen__convert__closures_____invoke__h5de9179e75b47c10(arg0, arg1) {
-    wasm.wasm_bindgen__convert__closures_____invoke__h5de9179e75b47c10(arg0, arg1);
+function wasm_bindgen__convert__closures_____invoke__h8cc74774ac35b9bf(arg0, arg1) {
+    wasm.wasm_bindgen__convert__closures_____invoke__h8cc74774ac35b9bf(arg0, arg1);
 }
 
-function wasm_bindgen__convert__closures_____invoke__hb3568c88ea460d32(arg0, arg1, arg2) {
-    const ret = wasm.wasm_bindgen__convert__closures_____invoke__hb3568c88ea460d32(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__hedaca19d7116f191(arg0, arg1, arg2) {
+    const ret = wasm.wasm_bindgen__convert__closures_____invoke__hedaca19d7116f191(arg0, arg1, arg2);
     if (ret[1]) {
         throw takeFromExternrefTable0(ret[0]);
     }

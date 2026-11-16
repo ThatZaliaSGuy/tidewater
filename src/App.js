@@ -687,6 +687,34 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 	}
 
+	// Bodies in the water besides the craft the wake simulation knows itself: the swimmer and a car
+	// afloat (floating props add themselves, physics/Props.js). Each pushes the water through
+	// WakeSim.addBody: rings where it enters, a wake where it moves.
+	waterBodies() {
+
+		const wake = this.wake, player = this.player;
+		if ( ! wake ) return;
+		if ( player && player.mode === 'swim' ) {
+
+			const v = player.velocity, speed = Math.hypot( v.x, v.z );
+			wake.addBody( { id: 'swimmer', x: player.position.x, z: player.position.z, yaw: Math.atan2( v.x, v.z ) || 0,
+				halfWidth: 0.35, halfLength: 0.9, head: 0.11, churn: Math.min( 1, speed / 2.5 ) * 0.5, speed } );
+
+		}
+
+		const s = this.rally?.state;
+		if ( s && s[ 73 ] > 0.05 ) {
+
+			// heading: the car's +Z axis in the world
+			const qx = s[ 3 ], qy = s[ 4 ], qz = s[ 5 ], qw = s[ 6 ];
+			const fx = 2 * ( qx * qz + qw * qy ), fz = 1 - 2 * ( qx * qx + qy * qy ), speed = Math.abs( s[ 7 ] ) / 3.6;
+			wake.addBody( { id: 'car', x: s[ 0 ], z: s[ 2 ], yaw: Math.atan2( fx, fz ), halfWidth: 0.9, halfLength: 2.1,
+				head: 0.16 * Math.min( 1, s[ 73 ] * 3 ), churn: Math.min( 1, speed / 8 ) * 0.6, speed } );
+
+		}
+
+	}
+
 	// Game time: the world clock the frames advance, slowed by warp().
 	get gameTime() { return G.time.value; }
 
@@ -745,6 +773,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.boatCtl.update( dt );
 		this.boatSpray.update( dt );
 		this.jetskis?.update( dt );
+		this.waterBodies();
 		this.wake.update( dt );
 		// The ferry first: her deck's pose feeds the car physics as a moving platform.
 		this.ferry?.update( dt );

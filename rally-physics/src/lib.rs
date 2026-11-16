@@ -71,7 +71,7 @@ impl RallyPhysics {
             .init_resource::<WaterPlane>()
             .init_resource::<controller::Assists>()
             .init_resource::<controller::Damage>()
-            .add_systems(FixedUpdate, ((controller::record_impacts,controller::drive_forces).chain(), props::drive_pusher));
+            .add_systems(FixedUpdate, ((controller::record_impacts,controller::drive_forces).chain(), props::drive_pusher, props::float_props));
         let car = app.world_mut().spawn((vehicle::bundle(&VehicleConfig::aster()), Transform::from_xyz(0.0, 100.0, 0.0))).id();
         app.finish();
         app.cleanup();

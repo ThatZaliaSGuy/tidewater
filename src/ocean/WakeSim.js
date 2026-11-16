@@ -15,6 +15,11 @@ const SPONGE = 22; // absorbing band at the window edges (cells)
 // boat-frame box of the near-field template (steady wave pattern under the hull)
 const TW = 32, TH = 88; // 0.1 m texels (steep pressure near the stem: keep resampling errors small)
 const TX0 = - 1.6, TX1 = 1.6, TZ0 = - 4.4, TZ1 = 4.4;
+// generic bodies pushing the water (elliptical pressure patches)
+export const WAKE_BODIES = 16;
+// a patch narrower than two cells cannot be represented: it is widened to this half axis, its head
+// lowered to displace the same volume
+const BODY_MIN_R = 2 * CELL;
 
 // WGSL float literal
 const f = ( x ) => {
@@ -48,6 +53,12 @@ const f = ( x ) => {
 // Dissipation is a turbulent eddy viscosity in flux form (conserves mass): breaking crests, the
 // surf and the propeller wash feed the turbulence, which flattens the waves it passes through.
 // Dry land and the pier piles are rigid (weak reflection, scattering around the piles).
+//
+// Bodies: besides the three craft, anything else in the water pushes it through a list of elliptical
+// pressure patches (addBody, up to WAKE_BODIES per frame): a floating crate, a swimmer, a car driving
+// into the sea, a whale surfacing. A patch that appears or bobs sends out rings, a patch that moves
+// leaves a wake, with the same dispersion as the hull's. The list is filled each frame by whoever
+// owns the bodies and cleared by update().
 //
 // Output (display texture, rgba16f): (h, dh/dx, dh/dz, foam), read by WaterSurface through
 // displacement() / fragment() (one sampler per shader stage), plus the aeration (bubbles in the
@@ -92,6 +103,10 @@ export class WakeSim {
 			ferryRot: [ 'vec2f', new Vector2( 1, 0 ) ],
 			ferryHull: [ 'vec2f', new Vector2( 6.7, - 1.5 ) ], // demi-hull centreline offset (x), footprint centre (z), ship frame
 			ferryShape: [ 'vec4f', new Vector4( 2.4, 1.8, 0.6, 3.2 ) ], // bow peak (x head), its length (m), stern trough (x head), its length (m)
+			// generic bodies: ( x, z, cos yaw, sin yaw ) and ( half width, half length, pressure head (m), churn )
+			bodyA: [ `vec4f[${ WAKE_BODIES }]`, new Array( WAKE_BODIES ).fill( 0 ).map( () => new Vector4( 1e6, 1e6, 1, 0 ) ) ],
+			bodyB: [ `vec4f[${ WAKE_BODIES }]`, new Array( WAKE_BODIES ).fill( 0 ).map( () => new Vector4( 1, 1, 0, 0 ) ) ],
+			bodyCount: [ 'f32', 0 ],
 			dt: [ 'f32', 1 / 60 ],
 			amount: [ 'f32', 0 ],
 			source: [ 'f32', 1 ], // pressure gain
@@ -141,6 +156,14 @@ export class WakeSim {
 		this.ferryHead = 1.45; // m of pressure head at service speed (tuned: the divergent waves of a 19.5 deg wedge, docs/jetski.md)
 		this.ferryWash = 0.5; // the waterjets' wash (turbulence, so foam) per m/s of speed (low enough that the lace keeps its gaps)
 		this.ferryState = { speed: 0, near: false };
+		// generic bodies (see addBody)
+		this.uBodyA = U.bodyA;
+		this.uBodyB = U.bodyB;
+		this.uBodyCount = U.bodyCount;
+		this._bodies = [];
+		this._bodyPool = [];
+		this._bodyHeads = new Map(); // id -> head last frame (a body that sinks in or lifts out stirs the water)
+		this._follow = new Vector2( 1e6, 1e6 ); // where the window is, or would be, centred (m)
 		this.uTrim = U.trim;
 		this.uSource = U.source;
 		this.uWash = U.wash;
@@ -476,6 +499,23 @@ fn wakeSki( p: vec2f ) -> vec2f {
 	return vec2f( P, wash * wk.ski.z * ( wk.ski.w + 1.5 ) );
 }
 
+// generic bodies: the pressure head (x) and the churn (y) of every elliptical patch over this cell
+fn wakeBodies( p: vec2f ) -> vec2f {
+	var out = vec2f( 0.0 );
+	let n = i32( wk.bodyCount );
+	for ( var i = 0; i < n; i++ ) {
+		let a = wk.bodyA[ i ]; let b = wk.bodyB[ i ];
+		let rel = p - a.xy;
+		// (most cells are far from every body)
+		if ( abs( rel.x ) + abs( rel.y ) > ( b.x + b.y ) * 1.5 ) { continue; }
+		let x = rel.x * a.z - rel.y * a.w;
+		let z = rel.x * a.w + rel.y * a.z;
+		let k = max( 1.0 - ( x / b.x ) * ( x / b.x ) - ( z / b.y ) * ( z / b.y ), 0.0 );
+		out += vec2f( b.z * k * k, b.w * k );
+	}
+	return out;
+}
+
 // the third craft (the ferry): a pressure patch under each demi-hull (fine entry and run), and the wash of
 // her two waterjets behind the transoms
 fn wakeFerry( p: vec2f ) -> vec2f {
@@ -535,7 +575,8 @@ fn wakeCell( col: u32, row: u32 ) -> vec4f {
 	let hollow = wakeImmersionAt( bx, ${ f( L.zAft + 0.25 ) } ) * exp( - max( aft, 0.0 ) / wk.hollow ) * smoothstep( - 0.3, 0.3, aft );
 	let skiW = wakeSki( p );
 	let ferW = wakeFerry( p );
-	let P = ( max( Ph, hollow * wk.hollowK ) + entry * wk.dyn ) * wk.source + skiW.x + ferW.x;
+	let bodW = wakeBodies( p );
+	let P = ( max( Ph, hollow * wk.hollowK ) + entry * wk.dyn ) * wk.source + skiW.x + ferW.x + bodW.x;
 
 	// on a (re)start the water under the hull is already displaced: no transient
 	let h = select( s.x, - P, wk.reset > 0.5 );
@@ -572,7 +613,9 @@ fn wakeCell( col: u32, row: u32 ) -> vec4f {
 	let along = p.x * sn + p.y * cs; let across = p.x * cs - p.y * sn;
 	let streaks = wakeNoise( vec2f( along * 0.12, across * 0.9 ) ) * 0.7 + wakeNoise( vec2f( along * 0.3, across * 1.9 ) + 5.3 ) * 0.3;
 	let mottle = clamp( ( streaks - 0.5 ) * 3.2, - 0.85, 0.85 ) + 1.0;
-	let washGen = inWash * wk.wash * ( wk.speed + 1.5 ) * ( streak * patchN * 0.6 + race + 0.08 ) * mix( mottle, 1.0, ( 1.0 - smoothstep( 0.0, 3.0, behind ) ) * 0.7 ) + skiW.y * ( wakeNoise( p * 0.9 + time * 0.7 ) * 0.8 + 0.35 ) * ( smoothstep( 0.3, 0.6, wakeNoise( p * 0.5 + 3.3 ) * 0.6 + wakeNoise( p * 1.7 ) * 0.4 ) * 0.85 + 0.15 ) + ferW.y * ( wakeNoise( p * 0.35 + time * 0.4 ) * 0.9 + 0.3 );
+	var washGen = inWash * wk.wash * ( wk.speed + 1.5 ) * ( streak * patchN * 0.6 + race + 0.08 ) * mix( mottle, 1.0, ( 1.0 - smoothstep( 0.0, 3.0, behind ) ) * 0.7 ) + skiW.y * ( wakeNoise( p * 0.9 + time * 0.7 ) * 0.8 + 0.35 ) * ( smoothstep( 0.3, 0.6, wakeNoise( p * 0.5 + 3.3 ) * 0.6 + wakeNoise( p * 1.7 ) * 0.4 ) * 0.85 + 0.15 ) + ferW.y * ( wakeNoise( p * 0.35 + time * 0.4 ) * 0.9 + 0.3 );
+	// bodies churn the water they move through or drop into
+	washGen += bodW.y * ( wakeNoise( p * 0.9 + time * 0.7 ) * 0.8 + 0.35 );
 
 	// bow: the spray thrown off the forward hull falls back in a band just outside the
 	// waterline (up to ~1.3 m out), where the bow wave rolls away from the hull
@@ -942,18 +985,91 @@ fn wakeFragment( xz: vec2f ) -> WakeFrag {
 
 	}
 
+	// A body in the water for this frame: an elliptical pressure patch. Call every frame the body is
+	// in the water, before update() (the list is cleared there).
+	//   x, z: centre (m); yaw: heading of the long axis (rad, as atan2( forward.x, forward.z ));
+	//   halfWidth, halfLength: half axes at the waterline (m);
+	//   head: pressure head (m of water): the depth the body presses the surface down, about its
+	//     displaced volume / waterplane area (a 100 kg crate of 0.8 m x 0.8 m: 0.16 m);
+	//   churn: white water it stirs up (0 none; ~1 a hard splash or a thrashing swimmer);
+	//   speed: its speed over the ground (m/s); id: stable key (for the rings when it enters or leaves).
+	// Returns false when the list is full.
+	addBody( { x, z, yaw = 0, halfWidth = 0.5, halfLength = 0.5, head = 0.1, churn = 0, speed = 0, id = null } ) {
+
+		if ( this._bodies.length >= WAKE_BODIES ) return false;
+		const o = this._bodyPool.pop() || {};
+		o.x = x; o.z = z; o.yaw = yaw; o.hw = halfWidth; o.hl = halfLength; o.head = head; o.churn = churn; o.speed = speed; o.id = id;
+		this._bodies.push( o );
+		return true;
+
+	}
+
+	// Whether a point lies in the simulated window (inside its absorbing border). While the
+	// simulation sleeps there is no window: the test is then against the one it would open, around
+	// the craft the window follows, so a body that drops in near the moored boat wakes it.
+	inWindow( x, z ) {
+
+		const half = ( HALF - SPONGE ) * CELL, live = this.hasWindow && ! this.sleeping;
+		const cx = live ? this.center.x * CELL : this._follow.x, cz = live ? this.center.y * CELL : this._follow.y;
+		return Math.abs( x - cx ) < half && Math.abs( z - cz ) < half;
+
+	}
+
+	// The head a body's patch has on the grid: a patch narrower than the grid resolves is widened,
+	// displacing the same volume. The still water under a floating body lies this much lower, so a
+	// body that reads the water height for its own buoyancy adds it back (it must not sink into the
+	// dent it makes).
+	bodyHead( head, halfWidth, halfLength ) {
+
+		return head * ( halfWidth * halfLength ) / ( Math.max( halfWidth, BODY_MIN_R ) * Math.max( halfLength, BODY_MIN_R ) );
+
+	}
+
+	// packs the frame's bodies into the kernel block; returns whether any of them stirs the water
+	_packBodies() {
+
+		const A = this.uBodyA.value, B = this.uBodyB.value, list = this._bodies, heads = this._bodyHeads;
+		let active = false, n = 0;
+		const seen = this._seen || ( this._seen = new Set() );
+		seen.clear();
+		for ( const o of list ) {
+
+			// (a body outside the window pushes nothing, and must not keep the simulation awake)
+			if ( ! this.inWindow( o.x, o.z ) ) { this._bodyPool.push( o ); continue; }
+			const head = this.bodyHead( o.head, o.hw, o.hl );
+			A[ n ].set( o.x, o.z, Math.cos( o.yaw ), Math.sin( o.yaw ) );
+			B[ n ].set( Math.max( o.hw, BODY_MIN_R ), Math.max( o.hl, BODY_MIN_R ), head, o.churn );
+			n ++;
+			// moving, or sinking in / lifting out: the water is being stirred
+			const prev = o.id !== null && heads.has( o.id ) ? heads.get( o.id ) : 0;
+			if ( o.speed > 0.3 || Math.abs( head - prev ) > 0.004 || o.churn > 0.05 ) active = true;
+			if ( o.id !== null ) { heads.set( o.id, head ); seen.add( o.id ); }
+			this._bodyPool.push( o );
+
+		}
+
+		for ( const id of heads.keys() ) if ( ! seen.has( id ) ) { heads.delete( id ); active = true; } // it left the water
+		list.length = 0;
+		this.uBodyCount.value = n;
+		return active;
+
+	}
+
 	update( dt ) {
 
 		const b = this.boat;
+		this._follow.set( b.position.x, b.position.z );
+		const bodiesActive = this._packBodies();
 		const speed = Math.hypot( b.velocity.x, b.velocity.z );
 		const sk = this.ski && this.ski.ctl, skiOn = !! sk && ( sk.driven || sk.speed > 0.8 );
 		const skiSpeed = skiOn ? Math.hypot( sk.velocity.x, sk.velocity.z ) : 0;
+		{ const at = skiOn && ! b.driven ? sk.position : b.position; this._follow.set( at.x, at.z ); }
 		// the ferry is a source while she is under way within reach of the window (not from across the bay)
 		const fs = this.ski?.app?.ferry?.ship, fp0 = skiOn && ! b.driven ? sk.position : b.position;
 		const fSpeed = fs ? Math.hypot( fs.velocity.x, fs.velocity.z ) : 0;
 		const ferryNear = !! fs && fSpeed > 0.3 && Math.hypot( fs.position.x - fp0.x, fs.position.z - fp0.z ) < 230;
 		this.ferryState.speed = fSpeed; this.ferryState.near = ferryNear;
-		const moving = speed > 0.5 || ( b.driven && Math.abs( b.throttle ) > 0.04 ) || skiSpeed > 0.5 || ( skiOn && sk.driven && sk.throttle > 0.04 ) || ferryNear;
+		const moving = speed > 0.5 || ( b.driven && Math.abs( b.throttle ) > 0.04 ) || skiSpeed > 0.5 || ( skiOn && sk.driven && sk.throttle > 0.04 ) || ferryNear || bodiesActive;
 		this.idleTime = moving ? 0 : this.idleTime + dt;
 
 		if ( this.idleTime > this.settleTime ) {

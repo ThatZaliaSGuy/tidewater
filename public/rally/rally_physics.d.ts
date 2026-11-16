@@ -84,6 +84,13 @@ export class RallyPhysics {
      */
     set_prop_solid(id: number, solid: boolean): boolean;
     /**
+     * The sea surface at an awake prop, from the renderer's wave query at its position: height,
+     * slope along x and z, and vertical rate (m/s). Non-finite input takes the water away again
+     * (the prop is on dry land, or the renderer has no query to spare for it). False when the
+     * prop is not awake.
+     */
+    set_prop_water(id: number, height: number, slope_x: number, slope_z: number, rate: number): boolean;
+    /**
      * The walker on foot as an upright capsule (feet at y) that pushes props and only props: the
      * car, terrain and scenery never see it. It is a person-sized dynamic body chasing this pose
      * with a clamped force (`drive_pusher`); a jump of more than 1.5 m moves it there outright.
@@ -179,13 +186,14 @@ export interface InitOutput {
     readonly rallyphysics_prop_poses: (a: number) => [number, number];
     readonly rallyphysics_pusher_position: (a: number) => [number, number];
     readonly rallyphysics_set_prop_solid: (a: number, b: number, c: number) => number;
+    readonly rallyphysics_set_prop_water: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
     readonly rallyphysics_set_pusher: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => void;
     readonly rallyphysics_sleep_prop: (a: number, b: number) => number;
     readonly rallyphysics_wake_prop: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => number;
-    readonly wasm_bindgen__closure__destroy__h444644dcfe552aba: (a: number, b: number) => void;
-    readonly wasm_bindgen__closure__destroy__h7012d1d11362b952: (a: number, b: number) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__hb3568c88ea460d32: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen__convert__closures_____invoke__h5de9179e75b47c10: (a: number, b: number) => void;
+    readonly wasm_bindgen__closure__destroy__h67fc6c1a825e6fbe: (a: number, b: number) => void;
+    readonly wasm_bindgen__closure__destroy__h8dc18e790607c01b: (a: number, b: number) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__hedaca19d7116f191: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen__convert__closures_____invoke__h8cc74774ac35b9bf: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

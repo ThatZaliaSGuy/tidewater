@@ -18,6 +18,9 @@ const PUSHER_LAYER: u32 = 4;
 /// barrel, and the renderer holds the walker back where the body is stopped (`pusher_position`).
 const PUSHER_MASS: f32 = 80.0;
 const PUSHER_FORCE: f32 = 500.0;
+/// Sea water (kg/m^3) and gravity, for the props afloat.
+const WATER_DENSITY: f32 = 1025.0;
+const GRAVITY: f32 = 9.81;
 /// Floats per record in `prop_poses`.
 pub const PROP_RECORD: usize = 10;
 
@@ -25,6 +28,37 @@ pub const PROP_RECORD: usize = 10;
 /// until something hits it hard enough, which the renderer then swaps for loose pieces).
 #[derive(Component)]
 pub struct PropBody { pub id: u32, pub breakable: bool }
+
+/// What the sea needs to know to carry a loose prop: its volume (m^3), mass (kg) and the half
+/// extent it spans top to bottom (m, taken as the same in every attitude).
+#[derive(Component)]
+pub struct Floats { pub volume: f32, pub mass: f32, pub half: f32 }
+
+/// The sea surface at one prop, measured by the renderer with its own wave query
+/// (`set_prop_water`): height, slope along x and z, vertical rate (m/s). A prop without it is on
+/// dry land as far as the physics knows. Per prop, because props drift metres apart and a wave is
+/// not a plane over that distance.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct WaterAt { pub height: f32, pub slope_x: f32, pub slope_z: f32, pub rate: f32 }
+
+/// Loose props float. Buoyancy is the weight of the water the wet share of the prop displaces
+/// (a wooden crate rides high, a full steel drum low); water resists its motion relative to the
+/// moving surface and its spin, and the wave's pressure gradient pushes it down the slope.
+pub fn float_props(mut props: Query<(&Position, &Floats, &WaterAt, Forces), With<PropBody>>) {
+    for (position, floats, water, mut forces) in &mut props {
+        let half = floats.half.max(0.02);
+        let wet = ((water.height - (position.0.y - half)) / (2.0 * half)).clamp(0.0, 1.0);
+        if wet <= 0.0 { continue; }
+        let buoyancy = WATER_DENSITY * GRAVITY * floats.volume * wet;
+        let relative = forces.linear_velocity() - Vec3::Y * water.rate;
+        // heave is damped harder than drift: a floating body bobs a few times and settles
+        let drag = -Vec3::new(relative.x * 1.2, relative.y * 3.5, relative.z * 1.2) * floats.mass * wet;
+        let wave = -Vec3::new(water.slope_x, 0.0, water.slope_z) * buoyancy.min(floats.mass * GRAVITY);
+        forces.apply_force(Vec3::Y * buoyancy + drag + wave);
+        let spin = forces.angular_velocity();
+        forces.apply_torque(-spin * floats.mass * half * half * 3.0 * wet);
+    }
+}
 
 /// Where the walker is (body centre) and how fast it walks; `drive_pusher` chases it.
 #[derive(Component)]
@@ -81,7 +115,9 @@ impl RallyPhysics {
         if breakable {
             body.insert((RigidBody::Static, Sensor, CollidingEntities::default()));
         } else {
-            body.insert((RigidBody::Dynamic, ColliderDensity(mass / volume), LinearVelocity(velocity), AngularVelocity::ZERO));
+            // (the half extent of a cube of the same volume: the prop may lie in any attitude)
+            body.insert((RigidBody::Dynamic, ColliderDensity(mass / volume), LinearVelocity(velocity), AngularVelocity::ZERO,
+                Floats { volume, mass, half: volume.cbrt() * 0.5 }));
         }
         let entity = body.id();
         self.props.insert(id, entity);
@@ -127,6 +163,21 @@ impl RallyPhysics {
             out.extend([prop.id as f32, p.0.x, p.0.y, p.0.z, q.0.x, q.0.y, q.0.z, q.0.w, speed, flag]);
         }
         out
+    }
+
+    /// The sea surface at an awake prop, from the renderer's wave query at its position: height,
+    /// slope along x and z, and vertical rate (m/s). Non-finite input takes the water away again
+    /// (the prop is on dry land, or the renderer has no query to spare for it). False when the
+    /// prop is not awake.
+    pub fn set_prop_water(&mut self, id: u32, height: f32, slope_x: f32, slope_z: f32, rate: f32) -> bool {
+        let Some(&entity) = self.props.get(&id) else { return false; };
+        let mut body = self.app.world_mut().entity_mut(entity);
+        if [height, slope_x, slope_z, rate].iter().all(|v| v.is_finite()) {
+            body.insert(WaterAt { height, slope_x: slope_x.clamp(-0.5, 0.5), slope_z: slope_z.clamp(-0.5, 0.5), rate: rate.clamp(-5.0, 5.0) });
+        } else {
+            body.remove::<WaterAt>();
+        }
+        true
     }
 
     /// Number of awake props (loose and breakable).

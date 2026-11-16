@@ -11,6 +11,12 @@ import { Matrix4, Matrix3, Vector3, Quaternion } from '../engine/index.js';
 // draws it where it went. Once it rests and everyone is well away it goes back to sleep: the body
 // goes, the pose stays. Fence panels wake as sensors and break into loose pieces when the car
 // hits them fast enough; a slow push meets a solid fence.
+//
+// Water: a loose prop over the sea floats. Each awake prop over water takes one of a few wave
+// queries (FLOAT_SLOTS), and the height, slope and rise of the sea at it go to the physics
+// (set_prop_water, props.rs float_props). A prop in the water is also a body of the wake
+// simulation (WakeSim.addBody): it sends out rings when it drops in and as it bobs. A floating
+// prop never comes to rest, so it sleeps by distance instead (FLOAT_SLEEP), where it floats.
 
 // Proxy volume density (air gaps included, kg/m^3), friction and bounce per material.
 const MATERIALS = {
@@ -29,6 +35,9 @@ const BREAK_SPEED = 4; // m/s of the hitter
 const REST = 0.6; // seconds at rest before a prop may sleep
 const EPS = 1e-4;
 const REACH = 0.15; // how far the walker may get ahead of their stopped body (m)
+const FLOAT_SLOTS = 12; // wave queries for props over water (one each; further props sink)
+const FLOAT_SLEEP = 45; // m from everyone at which a floating prop goes to sleep
+const SEA_DENSITY = 1025;
 
 const _m = new Matrix4(), _d = new Matrix4(), _inv = new Matrix4(), _n = new Matrix3();
 const _p = new Vector3(), _q = new Quaternion(), _s = new Vector3( 1, 1, 1 ), _v = new Vector3(), _c = new Vector3();
@@ -167,6 +176,10 @@ export class PropPhysics {
 		this.stats = { props: 0, panels: 0, awake: 0, wakes: 0, sleeps: 0, breaks: 0, ms: 0 };
 		this._dims = new Float32Array( 3 );
 		this._state = new Float32Array( 10 );
+		// wave queries for the props over water: slot -> prop, and each prop's `float` record
+		this.floatSlot = - 1;
+		this.floats = new Array( FLOAT_SLOTS ).fill( null );
+		this.stats.afloat = 0;
 
 	}
 
@@ -302,6 +315,7 @@ export class PropPhysics {
 		const pushers = this.pushers();
 		for ( const h of pushers ) this.wakeAround( h );
 		if ( this.awake.size ) this.readBack( dt, pushers );
+		this.float( dt );
 		this.stats.awake = this.awake.size;
 		this.stats.ms = performance.now() - t0;
 
@@ -359,6 +373,8 @@ export class PropPhysics {
 
 		}
 		if ( ! this.physics.wake_prop( p.id, shape, this._dims, state, Math.max( 0.5, volume * density ), friction, bounce, false ) ) return;
+		p.mass = Math.max( 0.5, volume * density );
+		p.spanY = Math.cbrt( volume ) * 0.5; // the half extent the physics floats it by (props.rs)
 		this.awake.set( p.id, p );
 		p.rest = 0;
 		this.stats.wakes ++;
@@ -424,6 +440,13 @@ export class PropPhysics {
 			const far = pushers.every( h => ( o.x - h.x ) ** 2 + ( o.z - h.z ) ** 2 > ( h.r + 3 ) ** 2 );
 			if ( ! far ) continue;
 			if ( p.panel ) { this.sleep( p ); continue; }
+			// afloat: it never rests, so it sleeps once everyone is a long way off
+			if ( p.float && p.float.wet > 0 ) {
+
+				if ( pushers.every( h => ( o.x - h.x ) ** 2 + ( o.z - h.z ) ** 2 > FLOAT_SLEEP * FLOAT_SLEEP ) ) this.sleep( p );
+				continue;
+
+			}
 			if ( p.rest < REST ) continue;
 			let leaning = false;
 			for ( const other of this.awake.values() ) {
@@ -482,10 +505,105 @@ export class PropPhysics {
 
 		this.physics.sleep_prop( p.id );
 		this.awake.delete( p.id );
+		this.dropFloat( p );
 		this.stats.sleeps ++;
 		if ( p.panel ) return;
 		this.file( p );
 		this.walkerBox( p );
+
+	}
+
+	// ---- water
+
+	dropFloat( p ) {
+
+		if ( ! p.float ) return;
+		this.floats[ p.float.slot ] = null;
+		p.float = null;
+
+	}
+
+	// Props over water: give each a wave query, hand the sea at it to the physics, and make it a body
+	// of the wake simulation while it is in the water.
+	float( dt ) {
+
+		const { query, terrainData, wake } = this.app;
+		if ( ! query || ! terrainData || ! this.physics.set_prop_water ) return;
+		if ( this.floatSlot < 0 ) {
+
+			try { this.floatSlot = query.allocate( 'props', FLOAT_SLOTS ); } catch ( e ) { this.floatSlot = - 2; }
+
+		}
+
+		if ( this.floatSlot < 0 ) return;
+		// who is over water (the sea bed below sea level under it, and not high above it on the pier)
+		for ( const p of this.awake.values() ) {
+
+			if ( p.panel ) continue;
+			const o = p.position;
+			const over = terrainData.heightAt( o.x, o.z ) < 0.3 && o.y < 2.5;
+			if ( over && ! p.float ) {
+
+				const slot = this.floats.indexOf( null );
+				if ( slot < 0 ) continue; // no query to spare: it sinks
+				p.float = { slot, age: 0, h: 0, t: - 1, rate: 0, wet: 0, y: o.y, x: o.x, z: o.z, splash: 0 };
+				this.floats[ slot ] = p;
+
+			} else if ( ! over && p.float ) {
+
+				this.physics.set_prop_water( p.id, NaN, 0, 0, 0 );
+				this.dropFloat( p );
+
+			}
+
+		}
+
+		let afloat = 0;
+		const fresh = query.cpuValid && query.version !== this._floatVersion;
+		this._floatVersion = query.version;
+		for ( const p of this.floats ) {
+
+			if ( ! p ) continue;
+			const f = p.float, o = p.position, s = this.floatSlot + f.slot;
+			query.setPoint( s, o.x, o.z );
+			f.age ++;
+			// the first results after taking the slot belong to whoever had it before
+			if ( fresh && f.age > 4 ) {
+
+				const h = query.cpu[ s * 4 ], nx = query.cpu[ s * 4 + 1 ], nz = query.cpu[ s * 4 + 2 ];
+				const ny = Math.sqrt( Math.max( 0.05, 1 - nx * nx - nz * nz ) );
+				if ( f.t >= 0 && query.resultTime > f.t ) f.rate += ( Math.max( - 3, Math.min( 3, ( h - f.h ) / ( query.resultTime - f.t ) ) ) - f.rate ) * 0.5;
+				f.h = h; f.t = query.resultTime;
+				f.sx = - nx / ny; f.sz = - nz / ny;
+				f.ready = true;
+
+			}
+
+			if ( ! f.ready ) continue;
+			// the proxy's footprint on the water, and the head it presses down with: its weight over
+			// that footprint, but no more than it is actually immersed
+			const half = p.local.half, hw = Math.max( 0.15, half.x ), hl = Math.max( 0.15, half.z );
+			const sinkage = p.mass / ( SEA_DENSITY * 4 * hw * hl );
+			// the still water under a floating body lies lower by the head of its own patch: add it
+			// back, or the prop would sink into the dent it makes
+			const inWake = wake && ! wake.sleeping && wake.inWindow( o.x, o.z );
+			const own = inWake && f.wet > 0 ? wake.bodyHead( Math.min( sinkage, f.depth || 0 ), hw, hl ) : 0;
+			const level = f.h + own;
+			this.physics.set_prop_water( p.id, level, f.sx, f.sz, f.rate );
+			f.depth = Math.max( 0, level - ( o.y - p.spanY ) );
+			const wet = Math.min( 1, f.depth / ( 2 * p.spanY ) );
+			const vy = ( o.y - f.y ) / Math.max( dt, 1e-3 ), speed = Math.hypot( o.x - f.x, o.z - f.z ) / Math.max( dt, 1e-3 );
+			// dropping in throws up white water for a moment
+			if ( wet > 0 && f.wet <= 0 && vy < - 1 ) f.splash = Math.min( 1, - vy / 4 );
+			f.splash = Math.max( 0, f.splash - dt * 2.5 );
+			f.wet = wet; f.y = o.y; f.x = o.x; f.z = o.z;
+			if ( wet <= 0 ) continue;
+			afloat ++;
+			if ( wake ) wake.addBody( { id: 'prop' + p.id, x: o.x, z: o.z, halfWidth: hw, halfLength: hl, head: Math.min( sinkage, f.depth ), churn: f.splash, speed } );
+
+		}
+
+		this.stats.afloat = afloat;
 
 	}
 

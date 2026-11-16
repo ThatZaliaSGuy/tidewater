@@ -667,3 +667,42 @@ fn the_walker_shoves_a_crate_but_cannot_plough_a_full_barrel() {
     assert!(c[1]-10.0>1.0,"an empty crate is shoved along: moved {} m",c[1]-10.0);
     sim.set_pusher(0.0,0.0,0.0,0.0,0.0,0.0,0.3,1.8,false);
 }
+
+// Props afloat (props.rs float_props): the renderer measures the sea at each of them.
+#[test]
+fn a_wooden_crate_floats_high_and_a_full_drum_floats_low() {
+    // sea bed 3 m down, calm water at y = 0
+    let mut sim=RallyPhysics::new();
+    assert!(sim.set_terrain(&vec![-3.0;81],9,4000.0,-2000.0));
+    sim.reset(0.0,200.0,0.0,0.0);
+    // a 0.6 m wooden crate of 37 kg (170 kg/m^3) and a drum of 150 kg (about 590 kg/m^3), dropped from 1 m
+    assert!(sim.wake_prop(1,0,&[0.3,0.3,0.3],&upright(20.0,1.0,0.0),37.0,0.6,0.2,false));
+    assert!(sim.wake_prop(2,1,&[0.29,0.48,0.29],&upright(24.0,1.0,0.0),150.0,0.5,0.1,false));
+    assert!(sim.set_prop_water(1,0.0,0.0,0.0,0.0) && sim.set_prop_water(2,0.0,0.0,0.0,0.0));
+    assert!(!sim.set_prop_water(99,0.0,0.0,0.0,0.0));
+    run(&mut sim,8.0,[0.0,0.0,0.0,0.0]);
+    let (crate_y,drum_y)=(prop(&sim,1)[2],prop(&sim,2)[2]);
+    // both ride at the surface, not on the bed; the denser drum sits lower in the water
+    assert!(crate_y>-0.3 && crate_y<0.35,"crate at {crate_y}");
+    assert!(drum_y>-0.45 && drum_y<0.2,"drum at {drum_y}");
+    assert!(drum_y<crate_y-0.05,"drum {drum_y} should ride lower than crate {crate_y}");
+    // settled: the bobbing has died down
+    assert!(prop(&sim,1)[8]<0.25,"crate still moving at {}",prop(&sim,1)[8]);
+    // the water goes: they sink to the bed like any other prop
+    assert!(sim.set_prop_water(1,f32::NAN,0.0,0.0,0.0));
+    run(&mut sim,4.0,[0.0,0.0,0.0,0.0]);
+    assert!(prop(&sim,1)[2] < -2.0,"crate should rest on the bed, at {}",prop(&sim,1)[2]);
+}
+
+#[test]
+fn a_wave_slope_pushes_a_floating_crate_downhill() {
+    let mut sim=RallyPhysics::new();
+    assert!(sim.set_terrain(&vec![-5.0;81],9,4000.0,-2000.0));
+    sim.reset(0.0,200.0,0.0,0.0);
+    // the surface falls toward +x by 5 cm per metre
+    assert!(sim.wake_prop(1,0,&[0.3,0.3,0.3],&upright(20.0,0.1,0.0),37.0,0.6,0.2,false));
+    assert!(sim.set_prop_water(1,0.0,-0.05,0.0,0.0));
+    run(&mut sim,3.0,[0.0,0.0,0.0,0.0]);
+    assert!(prop(&sim,1)[1]>20.2,"crate should drift down the slope, at x {}",prop(&sim,1)[1]);
+}
+
