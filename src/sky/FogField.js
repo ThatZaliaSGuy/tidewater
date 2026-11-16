@@ -4,7 +4,8 @@
 // and how freshly it arrived. Each step the fog
 //   - is fed by sources that follow the terrain and the hour: radiation fog pooling in low ground and
 //     over the lagoon around dawn, sea smoke on the shallows, banks on the upper slopes when the air
-//     is very humid, a thin mist everywhere when it is saturated,
+//     is humid (deep, cloud-like, clinging to the mountain instead of draining off it), a thin mist
+//     everywhere when it is saturated,
 //   - drifts with the wind and drains downhill along its own surface (it is heavier than clear air),
 //   - spreads, levels like a liquid on flat ground, and
 //   - burns off in the sun, in dry air and in strong wind.
@@ -18,7 +19,7 @@ export const FOG_UNIT = 25; // metres per field unit
 export const FOG_RES = 128; // cells per side
 
 const N = FOG_RES, CELLS = N * N;
-const MIN_H = 0.05, START_H = 0.3, MAX_D = 2.2, MAX_H = 1.5, VISIBLE = 0.018;
+const MIN_H = 0.05, START_H = 0.3, MAX_D = 2.2, MAX_H = 3, VISIBLE = 0.018;
 
 const clamp = ( x, a, b ) => ( x < a ? a : x > b ? b : x );
 const smooth = ( a, b, x ) => {
@@ -87,6 +88,7 @@ export class FogField {
 		this.water = A(); // shallow, sheltered water (the lagoon)
 		this.valley = A(); // where cold air pools
 		this.bank = A(); // upper slopes that catch cloud
+		this.cling = A(); // the mountain: cloud there neither drains downhill nor burns off as readily
 		this.flat = A();
 		this.shore = A(); // land and shallows (1) against the open sea (0)
 		this.edge = A(); // 1 inside, fading to 0 at the border of the domain (no straight cut where the field ends)
@@ -156,7 +158,9 @@ export class FogField {
 			p *= 0.15 + 0.85 * this.shore[ k ];
 			this.valley[ k ] = clamp( p, 0, 1 );
 			// a band on the upper slopes, below the summit
-			this.bank[ k ] = smooth( 0.31 * peak, 0.47 * peak, g ) * smooth( 0.95 * peak, 0.75 * peak, g ) * ( peak > 1 ? 1 : 0 );
+			// (the summit itself catches less: it shows above its cloud more often than not)
+			this.bank[ k ] = smooth( 0.25 * peak, 0.4 * peak, g ) * ( 0.35 + 0.65 * smooth( 0.95 * peak, 0.75 * peak, g ) ) * ( peak > 1 ? 1 : 0 );
+			this.cling[ k ] = peak > 1 ? smooth( 0.15 * peak, 0.3 * peak, g ) : 0;
 
 		}
 
@@ -234,7 +238,8 @@ export class FogField {
 				const i = k % N, j = ( k / N ) | 0;
 				const patch = smooth( - 0.1, 0.45, noise3( i * 0.11 + time * 0.018, j * 0.14, time * 0.012 ) );
 				const a = src.bank * bank[ k ] * patch * Math.max( 0, src.bankTarget - d[ k ] );
-				add += a; thick += a * ( 0.4 + 0.25 * patch );
+				// (deep: 25 to 50 m of cloud lying on the slope)
+				add += a; thick += a * ( 1 + patch );
 
 			}
 
@@ -280,11 +285,11 @@ export class FogField {
 			const sx = ( top[ i < N - 1 ? k + 1 : k ] - top[ i > 0 ? k - 1 : k ] ) / ( ( i > 0 && i < N - 1 ? 2 : 1 ) * cs );
 			const sz = ( top[ j < N - 1 ? k + N : k ] - top[ j > 0 ? k - N : k ] ) / ( ( j > 0 && j < N - 1 ? 2 : 1 ) * cs );
 			const s = Math.sqrt( sx * sx + sz * sz ), lim = s > 1.6 ? 1.6 / s : 1;
-			const dk = c[ k ], run = env.drain * smooth( 0.12, 0.9, dk );
+			const dk = c[ k ], run = env.drain * smooth( 0.12, 0.9, dk ) * ( 1 - 0.9 * this.cling[ k ] );
 			U[ k ] = env.windX - sx * lim * run + vx[ k ];
 			W[ k ] = env.windZ - sz * lim * run + vz[ k ];
 			if ( dk > 0.02 ) { mx += env.windX * dk; mz += env.windZ * dk; mw += dk; }
-			loss[ k ] = windLoss;
+			loss[ k ] = windLoss * ( 1 - 0.75 * this.cling[ k ] );
 
 		}
 
@@ -328,9 +333,11 @@ export class FogField {
 			d[ k ] = nv;
 			if ( nv < VISIBLE * 0.25 ) continue;
 			const t0 = hd[ k ];
-			const wl = c[ l ] / ( c[ l ] + 0.08 ), wr = c[ r ] / ( c[ r ] + 0.08 ), wu = c[ u ] / ( c[ u ] + 0.08 ), wb = c[ b ] / ( c[ b ] + 0.08 );
+			// (the cloud on the mountain takes no part: its deep top would lift the mist at its foot)
+			const cl = this.cling, wn = ( q ) => c[ q ] / ( c[ q ] + 0.08 ) * ( 1 - cl[ q ] );
+			const wl = wn( l ), wr = wn( r ), wu = wn( u ), wb = wn( b );
 			const pull = wl * ( hd[ l ] - t0 ) + wr * ( hd[ r ] - t0 ) + wu * ( hd[ u ] - t0 ) + wb * ( hd[ b ] - t0 );
-			h[ k ] = Math.max( MIN_H, t0 + level * this.flat[ k ] * pull * 0.25 - ground[ k ] );
+			h[ k ] = Math.max( MIN_H, t0 + level * this.flat[ k ] * ( 1 - cl[ k ] ) * pull * 0.25 - ground[ k ] );
 
 		}
 
@@ -343,7 +350,9 @@ export class FogField {
 			vx[ k ] *= momentum; vz[ k ] *= momentum;
 			if ( d[ k ] < 1e-5 ) { d[ k ] = 0; continue; }
 			// (freshly poured fog shrugs the sun off for a while)
-			const rate = env.base + env.sun * ( 1 - 0.65 * fresh[ k ] ) + env.dry + loss[ k ];
+			// (cloud blown off the mountain evaporates as it sinks: the low ground keeps its shallow mist)
+			const lee = 0.3 * ( 1 - this.cling[ k ] ) * smooth( 0.7, 1.3, h[ k ] );
+			const rate = env.base + env.sun * ( 1 - 0.65 * fresh[ k ] ) * ( 1 - 0.5 * this.cling[ k ] ) + env.dry + loss[ k ] + lee;
 			const v = d[ k ];
 			// the last wisps go quickly
 			const nv = v * Math.exp( - rate * dt ) - ( v < 0.08 ? wisp * ( 1 - v / 0.08 ) : 0 );
@@ -516,9 +525,10 @@ export function fogClimate( src, env, { hour, humidity, wind, night, sunElevatio
 	// sea smoke on the shallows in the cold hours
 	src.steam = 0.045 * cool * humid * calm;
 	src.steamTarget = 0.3;
-	// banks on the upper slopes when the air is close to saturated
-	src.bank = 0.07 * smooth( 0.74, 0.93, humidity ) * ( 0.4 + 0.6 * chill ) * smooth( 3.2, 1.2, energy ) * ( 1 - 0.5 * day * smooth( 0.3, 0.8, sunElevation ) );
-	src.bankTarget = 0.42;
+	// cloud on the mountain: moist air lifted up the slopes (it wants some wind, unlike the mist below),
+	// fullest in the cool hours, thinning to wisps under a high sun
+	src.bank = 0.07 * smooth( 0.55, 0.9, humidity ) * ( 0.5 + 0.5 * chill ) * ( 0.5 + 0.5 * smooth( 4, 1.5, energy ) ) * ( 1 - 0.6 * day * smooth( 0.3, 0.8, sunElevation ) );
+	src.bankTarget = 0.5;
 	// a thin mist everywhere when it is saturated
 	src.mist = 0.06 * smooth( 0.9, 1, humidity ) * ( 0.4 + 0.6 * humid );
 	src.mistTarget = 0.3;

@@ -45,11 +45,19 @@ const g = field.bounds;
 assert.ok( g.maxX > g.minX && g.maxY > g.minY && g.minY >= - 2, 'bounds' );
 assert.ok( field.densityAt( 0, 0, 5000 ) === 0, 'no fog far above the layer' );
 
-// the midday sun and a breeze burn it off
+// cloud on the mountain: deep, and it stays up there
+let up = 0, upH = 0, upN = 0;
+for ( let k = 0; k < FOG_RES * FOG_RES; k ++ ) if ( field.bank[ k ] > 0.6 ) { up += field.d[ k ]; upH += field.h[ k ] * field.d[ k ]; upN ++; }
+assert.ok( upN > 0 && up / upN > 0.04, 'cloud forms on the upper slopes' );
+assert.ok( upH / up > 0.8, 'and it is deep' );
+
+// the midday sun and a breeze burn the low mist off
 const dawn = field.amount;
 run( 240, air( 13, 0.8, 7 ) );
 finite();
-assert.ok( field.amount < dawn * 0.1, 'midday burns it off' );
+low = 0;
+for ( let k = 0; k < FOG_RES * FOG_RES; k ++ ) if ( field.valley[ k ] > 0.5 ) low += field.d[ k ];
+assert.ok( low / lowN < 0.02 && field.amount < dawn * 0.5, 'midday burns the mist off' );
 
 // wind: a strong wind keeps it from forming at all
 field.clear();

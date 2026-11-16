@@ -18,7 +18,7 @@ import { FogField, fogClimate, fogNoiseData, FOG_UNIT, FOG_RES } from './FogFiel
 // WGSL (prefix `fog`): paramsModule (the uniforms alone, for the composite). Consumed: the haze
 // module (camera rays, hazeVisibilityRest, hazeLayerDepth), the engine shadow module's sunShadowHard.
 
-const STEPS = 40;
+const STEPS = 48;
 const CLR = [ 0, 0, 0, 0 ];
 const STEP_S = 1 / 15; // field step (s)
 
@@ -289,7 +289,9 @@ struct FogOut { @location( 0 ) color: vec4f, @location( 1 ) dist: vec4f };
 		let fd = fogAt( p0.xz * FG_U );
 		let D = fd.x; let topY = fd.y; let floorY = fd.z; let billow = fd.w;
 		let H = topY - floorY;                                 // layer thickness here
-		var ds = max( clamp( ( max( H, 0.0 ) + 0.08 ) * invY * 0.125, dsMin, dsMax ), t * 0.14 );
+		// (half as fast inside dense fog: a deep bank on the mountain gets several samples, while thin
+		// mist around the camera does not use up the steps that have to reach it)
+		var ds = max( clamp( ( max( H, 0.0 ) + 0.08 ) * invY * 0.125, dsMin, dsMax ), t * mix( 0.14, 0.07, smoothstep( 0.15, 0.4, D ) ) );
 		// clear air between the patches: a third of a cell at a time
 		if ( D < 0.004 ) { ds = max( ds, 0.2 ); }
 		// empty space above the highest possible billow: drop straight to the layer top
@@ -310,8 +312,10 @@ struct FogOut { @location( 0 ) color: vec4f, @location( 1 ) dist: vec4f };
 		let hf = clamp( h / max( H, 0.05 ), 0.0, 1.0 );
 		// far away the rolls and wisps are smaller than a pixel and a step: they fade to their mean
 		// (the tiling noise read as a regular pattern over the sea from the summit)
-		let nb = mix( vec4f( 0.5 ), fogNoise( p * FG_NB - fogParams.drift0.xyz ), 1.0 - smoothstep( 10.0, 36.0, t ) );
-		let nd = mix( vec4f( 0.5 ), fogNoise( p * FG_ND - fogParams.drift1.xyz + ( nb.gbr - 0.5 ) * 0.22 ), 1.0 - smoothstep( 5.0, 18.0, t ) );
+		// (a deep bank keeps its shapes further out than a thin sheet)
+		let far = 1.0 + 2.0 * clamp( H, 0.0, 2.0 );
+		let nb = mix( vec4f( 0.5 ), fogNoise( p * FG_NB - fogParams.drift0.xyz ), 1.0 - smoothstep( 10.0 * far, 36.0 * far, t ) );
+		let nd = mix( vec4f( 0.5 ), fogNoise( p * FG_ND - fogParams.drift1.xyz + ( nb.gbr - 0.5 ) * 0.22 ), 1.0 - smoothstep( 5.0 * far, 18.0 * far, t ) );
 
 		// billowing, soft top: broad rolls + small curls, livelier where fog has just arrived
 		let amp = clamp( H, 0.08, 1.0 ) * ( 0.55 + 0.45 * billow );
@@ -377,6 +381,9 @@ struct FogOut { @location( 0 ) color: vec4f, @location( 1 ) dist: vec4f };
 		let amb = mix( bounce, skyCol, 0.3 + 0.7 * hf ) * ( 0.4 + 0.6 * open );
 		let Lin = sunCol * lum + amb;
 
+		// (one sample that is not a number would spread over the whole frame through the accumulation,
+		// the upsample and the bloom: skip it)
+		if ( any( Lin != Lin ) || any( abs( Lin ) > vec3f( 1e6 ) ) || !( dens == dens ) ) { continue; }
 		let Tr = exp( - dens * sigma * ds );
 		col += T * albedo * Lin * ( 1.0 - Tr );
 		T *= Tr;
@@ -389,6 +396,7 @@ struct FogOut { @location( 0 ) color: vec4f, @location( 1 ) dist: vec4f };
 	let camH = max( cam.y - frame.seaLevel, 0.0 );
 	let tau = ( hazeLayerDepth( HZ_MARINE_SIGMA, HZ_MARINE_H, camH, rd.y, dist ) + hazeLayerDepth( HZ_AEROSOL_SIGMA, HZ_AEROSOL_H, camH, rd.y, dist ) ) * hazeParams.density;
 	let Th = exp( - tau );
+	if ( any( col != col ) || !( Th == Th ) || !( alpha == alpha ) ) { return out; }
 	out.color = vec4f( col * Th + frame.horizonColor * alpha * ( 1.0 - Th ), alpha );
 	out.dist = vec4f( min( dist, R.dist ), 0.0, 0.0, 1.0 );
 	return out;
