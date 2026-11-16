@@ -381,9 +381,6 @@ struct FogOut { @location( 0 ) color: vec4f, @location( 1 ) dist: vec4f };
 		let amb = mix( bounce, skyCol, 0.3 + 0.7 * hf ) * ( 0.4 + 0.6 * open );
 		let Lin = sunCol * lum + amb;
 
-		// (one sample that is not a number would spread over the whole frame through the accumulation,
-		// the upsample and the bloom: skip it)
-		if ( any( Lin != Lin ) || any( abs( Lin ) > vec3f( 1e6 ) ) || !( dens == dens ) ) { continue; }
 		let Tr = exp( - dens * sigma * ds );
 		col += T * albedo * Lin * ( 1.0 - Tr );
 		T *= Tr;
@@ -396,7 +393,6 @@ struct FogOut { @location( 0 ) color: vec4f, @location( 1 ) dist: vec4f };
 	let camH = max( cam.y - frame.seaLevel, 0.0 );
 	let tau = ( hazeLayerDepth( HZ_MARINE_SIGMA, HZ_MARINE_H, camH, rd.y, dist ) + hazeLayerDepth( HZ_AEROSOL_SIGMA, HZ_AEROSOL_H, camH, rd.y, dist ) ) * hazeParams.density;
 	let Th = exp( - tau );
-	if ( any( col != col ) || !( Th == Th ) || !( alpha == alpha ) ) { return out; }
 	out.color = vec4f( col * Th + frame.horizonColor * alpha * ( 1.0 - Th ), alpha );
 	out.dist = vec4f( min( dist, R.dist ), 0.0, 0.0, 1.0 );
 	return out;

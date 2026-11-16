@@ -1,10 +1,12 @@
 // Headless WebGPU (Dawn via the `webgpu` npm package) for engine tests.
+// DAWN_FLAGS: comma separated Dawn flags, e.g. DAWN_FLAGS="adapter=Microsoft Basic Render Driver" runs a
+// test on the CPU (slow, but it cannot hang or reset the graphics driver).
 import { create, globals } from 'webgpu';
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 
 Object.assign( globalThis, globals );
-Object.defineProperty( globalThis, 'navigator', { value: { gpu: create( [] ) }, configurable: true } );
+Object.defineProperty( globalThis, 'navigator', { value: { gpu: create( process.env.DAWN_FLAGS ? process.env.DAWN_FLAGS.split( ',' ) : [] ) }, configurable: true } );
 globalThis.location = { search: '' };
 
 // minimal RGBA8 PNG writer
