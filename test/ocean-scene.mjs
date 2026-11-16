@@ -53,6 +53,9 @@ fn skyReflectionRadiance( dir: vec3f ) -> vec3f { return skyRadiance( dir, false
 
 export async function makeOceanScene( { W = 2560, H = 1267, terrain = true, caustics = true, floor = true, extra = null, sky = skyStub, clouds = null } = {} ) {
 
+	// W, H: environment overrides (a small frame for a run on the CPU adapter)
+	if ( process.env.W ) W = Number( process.env.W );
+	if ( process.env.H ) H = Number( process.env.H );
 	const T = terrain === true ? terrainStub : terrain || null;
 
 	await GPU.init( { headless: true } );
@@ -93,7 +96,17 @@ export async function makeOceanScene( { W = 2560, H = 1267, terrain = true, caus
 
 	}
 
-	const waterMaterial = new WaterMaterial( { surface, sky, sceneCopy: sr.opaqueCopy } );
+	// REFRACTION=1: the water samples a RefractionPass, as in the game (the scene below the water only)
+	let refraction = null;
+	if ( process.env.REFRACTION ) {
+
+		const { RefractionPass } = await import( '../src/ocean/RefractionPass.js' );
+		refraction = new RefractionPass( { meshRenderer: mr, scene, camera, sceneRenderer: sr, scale: 0.5 } );
+		sr.onBeforeWater = () => refraction.render( G.seaLevel.value );
+
+	}
+
+	const waterMaterial = new WaterMaterial( { surface, sky, sceneCopy: sr.opaqueCopy, refraction } );
 	waterMaterial.clouds = clouds;
 	if ( ctx.onMaterial ) ctx.onMaterial( waterMaterial, sr );
 	const ocean = new E.Mesh( cdlod.geometry, waterMaterial );

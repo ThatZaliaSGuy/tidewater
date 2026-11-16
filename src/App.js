@@ -1,5 +1,6 @@
 import { Vector3, Euler, Color, MathUtils, Mesh } from './engine/index.js';
 import { GPU } from './engine/gpu/GPU.js';
+import { meshShaderOptions } from './engine/render/MeshShader.js';
 import { SunShadows } from './engine/render/Shadows.js';
 import { FrameUniforms } from './engine/render/Frame.js';
 
@@ -261,7 +262,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.sceneRenderer.onBeforeWater = () => {
 
 			this.surfaceReflections.render();
-			this.refraction.render( G.seaLevel.value );
+			if ( this.waterRefraction ) this.refraction.render( G.seaLevel.value );
 
 		};
 		if ( this.sky.background ) this.sceneRenderer.background = this.sky.background;
@@ -279,7 +280,13 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		} );
 		// the sea is not drawn inside the boat (its hull volume masks the surface)
 		this.sceneRenderer.addHullMask( this.boat.createHullVolumeGeometry(), this.boat.group );
+		// The water samples the refraction pass (two more textures) where the adapter has room for them.
+		// Without it the water shows the opaque copy, so the main pass must shade the deep seabed in full:
+		// its flat-colour shortcut for what the refraction pass covers would show as a dark patch.
+		this.waterRefraction = ( GPU.limits?.maxSampledTexturesPerShaderStage ?? Infinity ) >= 24 && ! qs.has( 'noRefraction' );
+		meshShaderOptions.submergedHidden = this.waterRefraction;
 		this.waterMaterial = new WaterMaterial( {
+			refraction: this.waterRefraction ? this.refraction : null,
 			surface: this.surface, sky: this.sky, environment: this.environment, sceneCopy: this.sceneRenderer.opaqueCopy, sceneDepthHalf: ( GPU.limits?.maxSampledTexturesPerShaderStage ?? Infinity ) >= 22 ? this.sceneRenderer.opaqueDepthHalf.texture : null,
 			hullMask: this.sceneRenderer.hullMaskRT.texture, hullMaskActive: this.sceneRenderer.hullMaskActive,
 		} );

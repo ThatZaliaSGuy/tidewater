@@ -40,6 +40,12 @@ function zero( t ) {
 
 }
 
+// submergedHidden: the main pass shades geometry deep under the water with a flat ambient colour,
+// because the water shows the refraction pass there instead (see submergedHidden below). Only valid
+// while the water really samples a refraction pass: an app whose water falls back to the opaque copy
+// must turn it off, or the flat colour shows through the water as a hard-edged dark patch.
+export const meshShaderOptions = { submergedHidden: true };
+
 // layout: [ { name, wgsl, location, instanced } ] (see MeshRenderer.geometryLayout)
 export function buildMeshShader( material, layout, pass ) {
 
@@ -53,6 +59,7 @@ export function buildMeshShader( material, layout, pass ) {
 	defs.LIT = material.lit ? 1 : 0;
 	defs.INSTANCED = has.has( 'instanceMatrix0' ) ? 1 : 0;
 	defs.INSTANCE_COLOR = has.has( 'instanceColor' ) ? 1 : 0;
+	defs.SUBMERGED_HIDE = meshShaderOptions.submergedHidden ? 1 : 0;
 	Object.assign( defs, pass.defines || {} );
 	defs.CLIP_DISTANCES = defs.REFRACTION_CLIP && GPU.features.has( 'clip-distances' ) ? 1 : 0;
 
@@ -217,7 +224,7 @@ ${ fetch }#if !HAS_POSITION
 #endif
 }
 
-#if PASS_MAIN && !PASS_LATE && LIT && !IS_WATER && !ALPHA_TEST && !STUDIO_LIGHTING
+#if PASS_MAIN && !PASS_LATE && LIT && !IS_WATER && !ALPHA_TEST && !STUDIO_LIGHTING && SUBMERGED_HIDE
 // Deep under the water, seen from above it: the water drawn over this pixel shows the refraction
 // pass (ocean/RefractionPass.js) at its refracted end point, never this pixel's own colour. The end
 // point is predicted as the water shader traces it (flat surface, the seabed at P's depth, a margin
@@ -302,7 +309,7 @@ struct FragOut {
 	if ( in.P.y > frame.seaLevel + REFRACTION_CLIP_MARGIN ) { discard; }
 #endif
 #endif
-#if PASS_MAIN && !PASS_LATE && LIT && !IS_WATER && !ALPHA_TEST && !STUDIO_LIGHTING
+#if PASS_MAIN && !PASS_LATE && LIT && !IS_WATER && !ALPHA_TEST && !STUDIO_LIGHTING && SUBMERGED_HIDE
 	// hidden under the water (see submergedHidden): an ambient colour, keeping depth and motion
 	if ( submergedHidden( in.P ) ) {
 		var so: FragOut;
