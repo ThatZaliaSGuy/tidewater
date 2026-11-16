@@ -15,6 +15,7 @@ breach. It runs directly on WebGPU and WGSL with its own small rendering engine,
 
 - A browser with WebGPU: a recent Chrome, Edge or Safari.
 - On a phone or tablet: Chrome on Android 12 or later. Touch controls appear by themselves (a stick under the left thumb, drag to look, pinch for the camera distance, buttons on the right); see `src/core/TouchControls.js`.
+- As an Android app: `android/` wraps the web build with Capacitor, so the game runs from the APK without a network. `npm run build`, `npx cap sync android`, then `gradlew assembleDebug` in `android/` (needs the Android SDK); the `Android app` workflow builds the same APK on GitHub. It needs an Android System WebView with WebGPU.
 - A capable GPU. It targets 60 fps at 2560×1267 on an Apple M5 Pro, and dynamic resolution scales
   the render down on slower machines.
 - The first load compiles several hundred shaders, which can take a minute or more. Later visits are

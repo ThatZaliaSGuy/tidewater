@@ -1,0 +1,8 @@
+{
+	"appId": "io.github.thatzaliasguy.tidewater",
+	"appName": "Tidewater",
+	"webDir": "dist",
+	"android": {
+		"webContentsDebuggingEnabled": true
+	}
+}
